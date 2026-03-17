@@ -192,8 +192,11 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onP
         if (!preparedEvent) return;
         analytics.trackCommandExecuted('start_prepared_meeting');
         try {
-            const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
-            const outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
+            const inputDeviceId = localStorage.getItem('preferredInputDeviceId') || undefined;
+            const useLegacyAudio = localStorage.getItem('useLegacyAudioBackend') === 'true';
+            const outputDeviceId = useLegacyAudio
+                ? (localStorage.getItem('preferredOutputDeviceId') || undefined)
+                : 'sck';
 
             await window.electronAPI.startMeeting({
                 title: preparedEvent.title,

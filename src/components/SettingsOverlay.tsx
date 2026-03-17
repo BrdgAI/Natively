@@ -2235,7 +2235,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                             <div className="flex gap-2 items-center px-1">
                                                 <Info size={14} className="text-text-secondary shrink-0" />
                                                 <p className="text-xs text-text-secondary">
-                                                    This preview tone plays through your current macOS system output. The selected output device above is used by the native meeting capture path.
+                                                    This preview tone plays through your current macOS system output. The selected output device above is used only by the legacy CoreAudio beta path; the default engine captures the current system mix with ScreenCaptureKit.
                                                 </p>
                                             </div>
 

@@ -157,12 +157,14 @@ const App: React.FC = () => {
     try {
       localStorage.setItem('natively_last_meeting_start', Date.now().toString());
       const inputDeviceId = localStorage.getItem('preferredInputDeviceId') || undefined;
-      const outputDeviceId = localStorage.getItem('preferredOutputDeviceId') || undefined;
       const useLegacyAudio = localStorage.getItem('useLegacyAudioBackend') === 'true';
+      const outputDeviceId = useLegacyAudio
+        ? (localStorage.getItem('preferredOutputDeviceId') || undefined)
+        : 'sck';
 
       console.log(
         `[App] Starting meeting with ${
-          useLegacyAudio ? 'CoreAudio-preferred' : 'automatic'
+          useLegacyAudio ? 'CoreAudio-preferred' : 'ScreenCaptureKit'
         } macOS output backend selection.`
       );
 
