@@ -1,7 +1,7 @@
 {
   "name": "natively",
   "version": "2.0.3",
-  "main": "./dist-electron/electron/main.js",
+  "main": "./dist-electron/main.js",
   "description": "Natively is a meeting notes app that uses AI to generate notes from your meetings.",
   "scripts": {
     "clean": "rimraf dist dist-electron",
@@ -45,8 +45,8 @@
         "to": "natively.icns"
       },
       {
-        "from": "resources/models/xenova/all-MiniLM-L6-v2",
-        "to": "models/all-MiniLM-L6-v2"
+        "from": "resources/models/Xenova/all-MiniLM-L6-v2",
+        "to": "models/Xenova/all-MiniLM-L6-v2"
       }
     ],
     "mac": {
