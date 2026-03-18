@@ -1,9 +1,33 @@
+export interface OverlayWindowSettings {
+  width: number
+  height: number
+  preferredMonitorId: string | null
+  strictPassiveMode: boolean
+  userSized: boolean
+  minWidth: number
+  minHeight: number
+  maxWidth: number
+  maxHeight: number
+}
+
+export interface OverlayMonitorInfo {
+  id: string
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  scaleFactor: number
+  isPrimary: boolean
+}
+
 export interface ElectronAPI {
   updateContentDimensions: (dimensions: {
     width: number
     height: number
   }) => Promise<void>
   onToggleExpand: (callback: () => void) => () => void
+  onEndSessionShortcut: (callback: () => void) => () => void
   getRecognitionLanguages: () => Promise<Record<string, any>>
   getScreenshots: () => Promise<Array<{ path: string; preview: string }>>
   deleteScreenshot: (
@@ -38,6 +62,12 @@ export interface ElectronAPI {
   toggleWindow: () => Promise<void>
   showWindow: () => Promise<void>
   hideWindow: () => Promise<void>
+  getOverlaySettings: () => Promise<OverlayWindowSettings>
+  setOverlayManualSize: (payload: { width: number; height: number }) => Promise<OverlayWindowSettings>
+  resetOverlayManualSize: () => Promise<OverlayWindowSettings>
+  listOverlayMonitors: () => Promise<OverlayMonitorInfo[]>
+  setOverlayMonitor: (payload: { monitorId: string | null }) => Promise<OverlayWindowSettings>
+  setOverlayStrictPassiveMode: (payload: { enabled: boolean }) => Promise<OverlayWindowSettings>
   openExternal: (url: string) => Promise<void>
   setUndetectable: (state: boolean) => Promise<{ success: boolean; error?: string }>
   getUndetectable: () => Promise<boolean>

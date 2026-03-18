@@ -139,6 +139,30 @@ export function initializeIpcHandlers(appState: AppState): void {
     return { success: true };
   })
 
+  safeHandle("overlay:get-settings", async () => {
+    return appState.getWindowHelper().getOverlayWindowSettings();
+  });
+
+  safeHandle("overlay:set-manual-size", async (_event, payload: { width: number; height: number }) => {
+    return appState.getWindowHelper().setOverlayManualDimensions(payload.width, payload.height);
+  });
+
+  safeHandle("overlay:reset-manual-size", async () => {
+    return appState.getWindowHelper().resetOverlayManualSize();
+  });
+
+  safeHandle("overlay:list-monitors", async () => {
+    return appState.getWindowHelper().listOverlayMonitors();
+  });
+
+  safeHandle("overlay:set-monitor", async (_event, payload: { monitorId: string | null }) => {
+    return appState.getWindowHelper().setOverlayMonitorPreference(payload.monitorId);
+  });
+
+  safeHandle("overlay:set-strict-passive-mode", async (_event, payload: { enabled: boolean }) => {
+    return appState.getWindowHelper().setOverlayStrictPassiveMode(payload.enabled);
+  });
+
 
   safeHandle("delete-screenshot", async (event, filePath: string) => {
     // Guard: only allow deletion of files within the app's own userData directory

@@ -8,6 +8,13 @@ export interface AppSettings {
     // can be moved here from CredentialsManager to allow early boot access.
     isUndetectable?: boolean;
     disguiseMode?: 'terminal' | 'settings' | 'activity' | 'none';
+    overlayWindow?: {
+        width?: number;
+        height?: number;
+        preferredMonitorId?: string | null;
+        strictPassiveMode?: boolean;
+        userSized?: boolean;
+    };
 }
 
 export class SettingsManager {

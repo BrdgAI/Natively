@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from 'react';
 interface RollingTranscriptProps {
     text: string;
     isActive?: boolean;
+    textScale?: number;
 }
 
 /**
@@ -14,7 +15,7 @@ interface RollingTranscriptProps {
  * - Text flows from right to left as new words arrive
  * - Edge fade gradients for visual polish
  */
-const RollingTranscript: React.FC<RollingTranscriptProps> = ({ text, isActive = true }) => {
+const RollingTranscript: React.FC<RollingTranscriptProps> = ({ text, isActive = true, textScale = 1 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to the end when text updates
@@ -27,7 +28,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({ text, isActive = 
     if (!text) return null;
 
     return (
-        <div className="relative w-[90%] mx-auto pt-2">
+        <div className="relative w-[96%] mx-auto pt-1">
             {/* Scrolling Container */}
             <div
                 ref={containerRef}
@@ -36,7 +37,10 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({ text, isActive = 
                     maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)'
                 }}
             >
-                <span className="inline-flex items-center text-[13px] text-white/40 italic leading-7 transition-all duration-300">
+                <span
+                    className="inline-flex items-center font-bold text-black leading-5 transition-all duration-300"
+                    style={{ fontSize: `${Math.max(12, 12 * textScale)}px` }}
+                >
                     {text}
                     {isActive && (
                         <span className="inline-flex items-center ml-2">

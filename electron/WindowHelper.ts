@@ -2,6 +2,7 @@
 import { BrowserWindow, screen, app } from "electron"
 import { AppState } from "./main"
 import path from "node:path"
+import { SettingsManager } from "./services/SettingsManager"
 
 const isEnvDev = process.env.NODE_ENV === "development"
 const isPackaged = app.isPackaged;
@@ -15,6 +16,36 @@ const isDev = isEnvDev && !isPackaged;
 const startUrl = isDev
   ? "http://localhost:5180"
   : `file://${path.join(__dirname, "../../dist/index.html")}`
+
+interface OverlayMonitorInfo {
+  id: string
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  scaleFactor: number
+  isPrimary: boolean
+}
+
+interface OverlayWindowSettingsSnapshot {
+  width: number
+  height: number
+  preferredMonitorId: string | null
+  strictPassiveMode: boolean
+  userSized: boolean
+  minWidth: number
+  minHeight: number
+  maxWidth: number
+  maxHeight: number
+}
+
+const OVERLAY_TOP_OFFSET = 54
+const OVERLAY_DEFAULT_WIDTH = 900
+const OVERLAY_DEFAULT_HEIGHT = 620
+const OVERLAY_MIN_WIDTH = 420
+const OVERLAY_MIN_HEIGHT = 220
+const OVERLAY_MAX_RATIO = 0.95
 
 export class WindowHelper {
   private launcherWindow: BrowserWindow | null = null
@@ -38,9 +69,189 @@ export class WindowHelper {
   private step: number = 20
   private currentX: number = 0
   private currentY: number = 0
+  private overlayPreferredWidth: number = OVERLAY_DEFAULT_WIDTH
+  private overlayPreferredHeight: number = OVERLAY_DEFAULT_HEIGHT
+  private overlayPreferredMonitorId: string | null = null
+  private strictPassiveMode: boolean = false
+  private overlayUserSized: boolean = false
 
   constructor(appState: AppState) {
     this.appState = appState
+    this.loadOverlaySettings()
+  }
+
+  private loadOverlaySettings(): void {
+    const saved = SettingsManager.getInstance().get('overlayWindow')
+    if (!saved) return
+
+    if (typeof saved.width === 'number' && Number.isFinite(saved.width)) {
+      this.overlayPreferredWidth = Math.round(saved.width)
+    }
+    if (typeof saved.height === 'number' && Number.isFinite(saved.height)) {
+      this.overlayPreferredHeight = Math.round(saved.height)
+    }
+    if (typeof saved.preferredMonitorId === 'string') {
+      this.overlayPreferredMonitorId = saved.preferredMonitorId
+    } else {
+      this.overlayPreferredMonitorId = null
+    }
+    if (typeof saved.strictPassiveMode === 'boolean') {
+      this.strictPassiveMode = saved.strictPassiveMode
+    }
+    if (typeof saved.userSized === 'boolean') {
+      this.overlayUserSized = saved.userSized
+    }
+  }
+
+  private persistOverlaySettings(): void {
+    SettingsManager.getInstance().set('overlayWindow', {
+      width: this.overlayPreferredWidth,
+      height: this.overlayPreferredHeight,
+      preferredMonitorId: this.overlayPreferredMonitorId,
+      strictPassiveMode: this.strictPassiveMode,
+      userSized: this.overlayUserSized
+    })
+  }
+
+  private getDisplayId(display: Electron.Display): string {
+    return String(display.id)
+  }
+
+  private getOverlayMonitorsInternal(): OverlayMonitorInfo[] {
+    const displays = screen.getAllDisplays()
+    const primaryId = this.getDisplayId(screen.getPrimaryDisplay())
+
+    return displays
+      .map((display) => ({
+        id: this.getDisplayId(display),
+        name: display.label || `Display ${display.id}`,
+        x: display.workArea.x,
+        y: display.workArea.y,
+        width: display.workArea.width,
+        height: display.workArea.height,
+        scaleFactor: display.scaleFactor,
+        isPrimary: this.getDisplayId(display) === primaryId
+      }))
+      .sort((a, b) => {
+        if (a.y !== b.y) return a.y - b.y
+        return a.x - b.x
+      })
+  }
+
+  public listOverlayMonitors(): OverlayMonitorInfo[] {
+    return this.getOverlayMonitorsInternal()
+  }
+
+  private resolveTargetDisplay(preferredId: string | null): Electron.Display {
+    const displays = screen.getAllDisplays()
+    const primaryDisplay = screen.getPrimaryDisplay()
+    if (displays.length === 0) return primaryDisplay
+
+    if (preferredId) {
+      const preferred = displays.find((display) => this.getDisplayId(display) === preferredId)
+      if (preferred) return preferred
+    }
+
+    if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+      const bounds = this.overlayWindow.getBounds()
+      const matchingDisplay = screen.getDisplayMatching(bounds)
+      if (matchingDisplay) return matchingDisplay
+    }
+
+    return primaryDisplay
+  }
+
+  private clampOverlaySize(
+    width: number,
+    height: number,
+    display: Electron.Display
+  ): { width: number; height: number } {
+    const maxWidth = Math.max(OVERLAY_MIN_WIDTH, Math.floor(display.workArea.width * OVERLAY_MAX_RATIO))
+    const maxHeight = Math.max(OVERLAY_MIN_HEIGHT, Math.floor(display.workArea.height * OVERLAY_MAX_RATIO))
+    const clampedWidth = Math.min(Math.max(Math.round(width), OVERLAY_MIN_WIDTH), maxWidth)
+    const clampedHeight = Math.min(Math.max(Math.round(height), OVERLAY_MIN_HEIGHT), maxHeight)
+    return { width: clampedWidth, height: clampedHeight }
+  }
+
+  private getOverlayMaxBounds(display: Electron.Display): { maxWidth: number; maxHeight: number } {
+    return {
+      maxWidth: Math.max(OVERLAY_MIN_WIDTH, Math.floor(display.workArea.width * OVERLAY_MAX_RATIO)),
+      maxHeight: Math.max(OVERLAY_MIN_HEIGHT, Math.floor(display.workArea.height * OVERLAY_MAX_RATIO))
+    }
+  }
+
+  private applyOverlayInteractionMode(): void {
+    if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return
+    this.overlayWindow.setIgnoreMouseEvents(this.strictPassiveMode, { forward: true })
+  }
+
+  private positionOverlayTopCenter(display: Electron.Display, width: number, height: number): void {
+    if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return
+    const workArea = display.workArea
+    const x = Math.floor(workArea.x + (workArea.width - width) / 2)
+    const maxY = workArea.y + Math.max(0, workArea.height - height)
+    const y = Math.min(workArea.y + OVERLAY_TOP_OFFSET, maxY)
+    this.overlayWindow.setBounds({ x, y, width, height })
+  }
+
+  public getOverlayWindowSettings(): OverlayWindowSettingsSnapshot {
+    const targetDisplay = this.resolveTargetDisplay(this.overlayPreferredMonitorId)
+    const bounds = this.overlayWindow && !this.overlayWindow.isDestroyed()
+      ? this.overlayWindow.getBounds()
+      : { width: this.overlayPreferredWidth, height: this.overlayPreferredHeight }
+    const clamped = this.clampOverlaySize(bounds.width, bounds.height, targetDisplay)
+    const maxBounds = this.getOverlayMaxBounds(targetDisplay)
+
+    return {
+      width: clamped.width,
+      height: clamped.height,
+      preferredMonitorId: this.overlayPreferredMonitorId,
+      strictPassiveMode: this.strictPassiveMode,
+      userSized: this.overlayUserSized,
+      minWidth: OVERLAY_MIN_WIDTH,
+      minHeight: OVERLAY_MIN_HEIGHT,
+      maxWidth: maxBounds.maxWidth,
+      maxHeight: maxBounds.maxHeight
+    }
+  }
+
+  public setOverlayMonitorPreference(monitorId: string | null): OverlayWindowSettingsSnapshot {
+    const available = this.getOverlayMonitorsInternal()
+    const resolvedId = monitorId && available.some((item) => item.id === monitorId) ? monitorId : null
+    this.overlayPreferredMonitorId = resolvedId
+    this.persistOverlaySettings()
+
+    if (this.currentWindowMode === 'overlay' && this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+      const targetDisplay = this.resolveTargetDisplay(this.overlayPreferredMonitorId)
+      const current = this.overlayWindow.getBounds()
+      const clamped = this.clampOverlaySize(current.width, current.height, targetDisplay)
+      this.positionOverlayTopCenter(targetDisplay, clamped.width, clamped.height)
+    }
+
+    return this.getOverlayWindowSettings()
+  }
+
+  public setOverlayStrictPassiveMode(enabled: boolean): OverlayWindowSettingsSnapshot {
+    this.strictPassiveMode = enabled
+    this.persistOverlaySettings()
+    this.applyOverlayInteractionMode()
+    return this.getOverlayWindowSettings()
+  }
+
+  public resetOverlayManualSize(): OverlayWindowSettingsSnapshot {
+    this.overlayUserSized = false
+    this.overlayPreferredWidth = OVERLAY_DEFAULT_WIDTH
+    this.overlayPreferredHeight = OVERLAY_DEFAULT_HEIGHT
+    this.persistOverlaySettings()
+    const targetDisplay = this.resolveTargetDisplay(this.overlayPreferredMonitorId)
+    const clamped = this.clampOverlaySize(this.overlayPreferredWidth, this.overlayPreferredHeight, targetDisplay)
+    this.overlayPreferredWidth = clamped.width
+    this.overlayPreferredHeight = clamped.height
+    if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+      this.positionOverlayTopCenter(targetDisplay, clamped.width, clamped.height)
+    }
+    this.persistOverlaySettings()
+    return this.getOverlayWindowSettings()
   }
 
   public setContentProtection(enable: boolean): void {
@@ -84,25 +295,51 @@ export class WindowHelper {
     }
   }
 
-  // Dedicated method for overlay window resizing - decoupled from launcher
   public setOverlayDimensions(width: number, height: number): void {
     if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return
-    console.log('[WindowHelper] setOverlayDimensions:', width, height);
+    if (this.overlayUserSized) return
 
+    const targetDisplay = this.resolveTargetDisplay(this.overlayPreferredMonitorId)
+    const clamped = this.clampOverlaySize(width, height, targetDisplay)
     const [currentX, currentY] = this.overlayWindow.getPosition()
-    const primaryDisplay = screen.getPrimaryDisplay()
-    const workArea = primaryDisplay.workAreaSize
-    const maxAllowedWidth = Math.floor(workArea.width * 0.9)
-    const maxAllowedHeight = Math.floor(workArea.height * 0.9)
-    const newWidth = Math.min(Math.max(width, 300), maxAllowedWidth) // min 300, max 90%
-    const newHeight = Math.min(Math.max(height, 1), maxAllowedHeight) // min 1, max 90%
-    const maxX = workArea.width - newWidth
-    const maxY = workArea.height - newHeight
-    const newX = Math.min(Math.max(currentX, 0), maxX)
-    const newY = Math.min(Math.max(currentY, 0), maxY)
+    const workArea = targetDisplay.workArea
+    const maxX = workArea.x + Math.max(0, workArea.width - clamped.width)
+    const maxY = workArea.y + Math.max(0, workArea.height - clamped.height)
+    const nextX = Math.min(Math.max(currentX, workArea.x), maxX)
+    const nextY = Math.min(Math.max(currentY, workArea.y), maxY)
 
-    this.overlayWindow.setContentSize(newWidth, newHeight)
-    this.overlayWindow.setPosition(newX, newY)
+    this.overlayWindow.setBounds({
+      x: nextX,
+      y: nextY,
+      width: clamped.width,
+      height: clamped.height
+    })
+
+    this.overlayPreferredWidth = clamped.width
+    this.overlayPreferredHeight = clamped.height
+    this.persistOverlaySettings()
+  }
+
+  public setOverlayManualDimensions(width: number, height: number): OverlayWindowSettingsSnapshot {
+    const targetDisplay = this.resolveTargetDisplay(this.overlayPreferredMonitorId)
+    const clamped = this.clampOverlaySize(width, height, targetDisplay)
+
+    this.overlayPreferredWidth = clamped.width
+    this.overlayPreferredHeight = clamped.height
+    this.overlayUserSized = true
+    this.persistOverlaySettings()
+
+    if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+      const current = this.overlayWindow.getBounds()
+      const workArea = targetDisplay.workArea
+      const maxX = workArea.x + Math.max(0, workArea.width - clamped.width)
+      const maxY = workArea.y + Math.max(0, workArea.height - clamped.height)
+      const nextX = Math.min(Math.max(current.x, workArea.x), maxX)
+      const nextY = Math.min(Math.max(current.y, workArea.y), maxY)
+      this.overlayWindow.setBounds({ x: nextX, y: nextY, width: clamped.width, height: clamped.height })
+    }
+
+    return this.getOverlayWindowSettings()
   }
 
   public createWindow(): void {
@@ -209,11 +446,21 @@ export class WindowHelper {
     // }
 
     // --- 2. Create Overlay Window (Hidden initially) ---
+    const targetOverlayDisplay = this.resolveTargetDisplay(this.overlayPreferredMonitorId)
+    const initialOverlaySize = this.clampOverlaySize(
+      this.overlayPreferredWidth,
+      this.overlayPreferredHeight,
+      targetOverlayDisplay
+    )
+    this.overlayPreferredWidth = initialOverlaySize.width
+    this.overlayPreferredHeight = initialOverlaySize.height
+    this.persistOverlaySettings()
+
     const overlaySettings: Electron.BrowserWindowConstructorOptions = {
-      width: 600,
-      height: 1,
-      minWidth: 300,
-      minHeight: 1,
+      width: initialOverlaySize.width,
+      height: initialOverlaySize.height,
+      minWidth: OVERLAY_MIN_WIDTH,
+      minHeight: OVERLAY_MIN_HEIGHT,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -226,7 +473,7 @@ export class WindowHelper {
       backgroundColor: "#00000000",
       alwaysOnTop: true,
       focusable: true,
-      resizable: false, // Enforce automatic resizing only
+      resizable: false,
       movable: true,
       skipTaskbar: true, // Don't show separately in dock/taskbar
       hasShadow: false, // Prevent shadow from adding perceived size/artifacts
@@ -240,6 +487,9 @@ export class WindowHelper {
       this.overlayWindow.setHiddenInMissionControl(true)
       this.overlayWindow.setAlwaysOnTop(true, "floating")
     }
+
+    this.positionOverlayTopCenter(targetOverlayDisplay, initialOverlaySize.width, initialOverlaySize.height)
+    this.applyOverlayInteractionMode()
 
     this.overlayWindow.loadURL(`${startUrl}?window=overlay`).catch(e => {
         console.error('[WindowHelper] Failed to load Overlay URL:', e);
@@ -356,16 +606,16 @@ export class WindowHelper {
 
     // Show Overlay FIRST
     if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
-      // Reset overlay position to center or last known? 
-      // For now, center it nicely
-      const primaryDisplay = screen.getPrimaryDisplay()
-      const workArea = primaryDisplay.workArea;
-      const currentBounds = this.overlayWindow.getBounds();
-      const targetHeight = Math.max(currentBounds.height, 216);
-      const x = Math.floor(workArea.x + (workArea.width - 600) / 2)
-      const y = Math.floor(workArea.y + (workArea.height - 600) / 2)
-
-      this.overlayWindow.setBounds({ x, y, width: 600, height: targetHeight });
+      const targetDisplay = this.resolveTargetDisplay(this.overlayPreferredMonitorId)
+      const targetSize = this.clampOverlaySize(
+        this.overlayPreferredWidth,
+        this.overlayPreferredHeight,
+        targetDisplay
+      )
+      this.overlayPreferredWidth = targetSize.width
+      this.overlayPreferredHeight = targetSize.height
+      this.positionOverlayTopCenter(targetDisplay, targetSize.width, targetSize.height)
+      this.applyOverlayInteractionMode()
 
       if (process.platform === 'win32' && this.contentProtection) {
         // Opacity Shield: Show at 0 opacity first to prevent frame leak

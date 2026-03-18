@@ -13,4 +13,6 @@
 export const FEATURES = {
   /** Set to false to completely hide premium UI elements */
   PREMIUM_ENABLED: true,
+  OVERLAY_UI_V2_ENABLED: true,
+  OVERLAY_DIAGNOSTICS_ENABLED: true,
 } as const;

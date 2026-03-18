@@ -1,5 +1,28 @@
 import { contextBridge, ipcRenderer } from "electron"
 
+interface OverlayWindowSettings {
+  width: number
+  height: number
+  preferredMonitorId: string | null
+  strictPassiveMode: boolean
+  userSized: boolean
+  minWidth: number
+  minHeight: number
+  maxWidth: number
+  maxHeight: number
+}
+
+interface OverlayMonitorInfo {
+  id: string
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  scaleFactor: number
+  isPrimary: boolean
+}
+
 // Types for the exposed Electron API
 interface ElectronAPI {
   updateContentDimensions: (dimensions: {
@@ -151,7 +174,14 @@ interface ElectronAPI {
   flushDatabase: () => Promise<{ success: boolean }>
   showWindow: () => Promise<void>
   hideWindow: () => Promise<void>
+  getOverlaySettings: () => Promise<OverlayWindowSettings>
+  setOverlayManualSize: (payload: { width: number; height: number }) => Promise<OverlayWindowSettings>
+  resetOverlayManualSize: () => Promise<OverlayWindowSettings>
+  listOverlayMonitors: () => Promise<OverlayMonitorInfo[]>
+  setOverlayMonitor: (payload: { monitorId: string | null }) => Promise<OverlayWindowSettings>
+  setOverlayStrictPassiveMode: (payload: { enabled: boolean }) => Promise<OverlayWindowSettings>
   onToggleExpand: (callback: () => void) => () => void
+  onEndSessionShortcut: (callback: () => void) => () => void
   toggleAdvancedSettings: () => Promise<void>
 
   // Streaming listeners
@@ -382,6 +412,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   toggleWindow: () => ipcRenderer.invoke("toggle-window"),
   showWindow: () => ipcRenderer.invoke("show-window"),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
+  getOverlaySettings: () => ipcRenderer.invoke("overlay:get-settings"),
+  setOverlayManualSize: (payload: { width: number; height: number }) => ipcRenderer.invoke("overlay:set-manual-size", payload),
+  resetOverlayManualSize: () => ipcRenderer.invoke("overlay:reset-manual-size"),
+  listOverlayMonitors: () => ipcRenderer.invoke("overlay:list-monitors"),
+  setOverlayMonitor: (payload: { monitorId: string | null }) => ipcRenderer.invoke("overlay:set-monitor", payload),
+  setOverlayStrictPassiveMode: (payload: { enabled: boolean }) => ipcRenderer.invoke("overlay:set-strict-passive-mode", payload),
   toggleAdvancedSettings: () => ipcRenderer.invoke("toggle-advanced-settings"),
   openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
   setUndetectable: (state: boolean) => ipcRenderer.invoke("set-undetectable", state),
@@ -411,6 +447,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("toggle-expand", subscription)
     return () => {
       ipcRenderer.removeListener("toggle-expand", subscription)
+    }
+  },
+  onEndSessionShortcut: (callback: () => void) => {
+    const subscription = () => callback()
+    ipcRenderer.on("shortcut:end-session", subscription)
+    return () => {
+      ipcRenderer.removeListener("shortcut:end-session", subscription)
     }
   },
 

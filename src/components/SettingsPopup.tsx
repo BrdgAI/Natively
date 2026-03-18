@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { MessageSquare, Link, Camera, Zap, Heart, User } from 'lucide-react';
+import { MessageSquare, Link, Camera, Zap, Heart, User, LogOut } from 'lucide-react';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useUiOpacitySetting } from '../hooks/useUiOpacitySetting';
 import {
@@ -8,6 +8,8 @@ import {
     percentToOpacity,
     OVERLAY_OPACITY_KEY
 } from '../lib/uiTransparency';
+import { useOverlayFontSizeSetting } from '../hooks/useOverlayFontSizeSetting';
+import { DEFAULT_OVERLAY_FONT_SIZE, OVERLAY_FONT_SIZE_KEY } from '../lib/uiTypography';
 
 const SettingsPopup = () => {
     const { shortcuts } = useShortcuts();
@@ -19,6 +21,7 @@ const SettingsPopup = () => {
     const [hasProfile, setHasProfile] = useState(false);
     const [isPremium, setIsPremium] = useState(false);
     const [overlayOpacity, setOverlayOpacity] = useUiOpacitySetting(OVERLAY_OPACITY_KEY, DEFAULT_OVERLAY_OPACITY);
+    const [overlayFontSize, setOverlayFontSize] = useOverlayFontSizeSetting(OVERLAY_FONT_SIZE_KEY, DEFAULT_OVERLAY_FONT_SIZE);
     const overlayPercent = opacityToPercent(overlayOpacity);
 
     const isFirstRender = React.useRef(true);
@@ -238,10 +241,10 @@ const SettingsPopup = () => {
                     </button>
                 </div>
 
-                {/* Overlay + Toolbar Transparency */}
+                {/* Overlay Transparency */}
                 <div className="px-3 py-2 hover:bg-white/5 rounded-lg transition-colors duration-200 group">
                     <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[12px] font-medium text-slate-300">Overlay + toolbar</span>
+                        <span className="text-[12px] font-medium text-slate-300">Overlay</span>
                         <span className="text-[11px] text-slate-400">{overlayPercent}%</span>
                     </div>
                     <input
@@ -252,7 +255,25 @@ const SettingsPopup = () => {
                         value={overlayPercent}
                         onChange={(e) => setOverlayOpacity(percentToOpacity(Number(e.target.value)))}
                         className="w-full h-1.5 accent-blue-500 bg-white/10 rounded-lg appearance-auto cursor-pointer"
-                        aria-label="Overlay and toolbar opacity"
+                        aria-label="Overlay opacity"
+                    />
+                </div>
+
+                {/* Overlay Font Size */}
+                <div className="px-3 py-2 hover:bg-white/5 rounded-lg transition-colors duration-200 group">
+                    <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[12px] font-medium text-slate-300">Font Size</span>
+                        <span className="text-[11px] text-slate-300">{overlayFontSize}px</span>
+                    </div>
+                    <input
+                        type="range"
+                        min={12}
+                        max={20}
+                        step={1}
+                        value={overlayFontSize}
+                        onChange={(e) => setOverlayFontSize(Number(e.target.value))}
+                        className="w-full h-1.5 accent-blue-500 bg-white/10 rounded-lg appearance-auto cursor-pointer"
+                        aria-label="Overlay font size"
                     />
                 </div>
 
@@ -311,6 +332,21 @@ const SettingsPopup = () => {
                     <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                         {/* Dynamic Keys for Take Screenshot */}
                         {(shortcuts.takeScreenshot || ['⌘', 'H']).map((key, index) => (
+                            <div key={index} className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-[10px] text-slate-500 font-medium min-w-[20px] text-center">
+                                {key}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* End Session */}
+                <div className="flex items-center justify-between px-3 py-2 hover:bg-white/5 rounded-lg transition-colors duration-200 group cursor-pointer interaction-base interaction-press">
+                    <div className="flex items-center gap-3">
+                        <LogOut className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                        <span className="text-[12px] text-slate-400 group-hover:text-slate-200 transition-colors">End Session</span>
+                    </div>
+                    <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                        {(shortcuts.endSession || ['⌘', 'Shift', 'B']).map((key, index) => (
                             <div key={index} className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-[10px] text-slate-500 font-medium min-w-[20px] text-center">
                                 {key}
                             </div>

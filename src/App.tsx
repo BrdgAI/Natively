@@ -219,6 +219,14 @@ const App: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!isOverlayWindow || !window.electronAPI?.onEndSessionShortcut) return;
+    const unsubscribe = window.electronAPI.onEndSessionShortcut(() => {
+      handleEndMeeting();
+    });
+    return () => unsubscribe();
+  }, [isOverlayWindow]);
+
   // Render Logic
   if (isSettingsWindow) {
     return (

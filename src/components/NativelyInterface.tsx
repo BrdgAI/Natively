@@ -23,13 +23,10 @@ import {
     SlidersHorizontal,
     Ghost,
     Link,
-    Code,
-    Copy,
     Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 // import { ModelSelector } from './ui/ModelSelector'; // REMOVED
 import TopPill from './ui/TopPill';
 import RollingTranscript from './ui/RollingTranscript';
@@ -41,10 +38,18 @@ import 'katex/dist/katex.min.css';
 import { analytics, detectProviderType } from '../lib/analytics/analytics.service';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useUiOpacitySetting } from '../hooks/useUiOpacitySetting';
+import { useOverlayFontSizeSetting } from '../hooks/useOverlayFontSizeSetting';
 import {
     DEFAULT_OVERLAY_OPACITY,
     OVERLAY_OPACITY_KEY,
 } from '../lib/uiTransparency';
+import {
+    DEFAULT_OVERLAY_FONT_SIZE,
+    OVERLAY_FONT_SIZE_KEY,
+} from '../lib/uiTypography';
+import { FEATURES } from '../lib/featureFlags';
+import { OverlayDiagnostics } from '../lib/overlayDiagnostics';
+import type { OverlayWindowSettings } from '../types/electron';
 
 interface Message {
     id: string;
@@ -60,6 +65,52 @@ interface Message {
 interface NativelyInterfaceProps {
     onEndMeeting?: () => void;
 }
+
+const HIGH_CONTRAST_CODE_THEME: Record<string, React.CSSProperties> = {
+    'code[class*="language-"]': {
+        color: '#000000',
+        background: 'transparent',
+        textShadow: 'none',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+    },
+    'pre[class*="language-"]': {
+        color: '#000000',
+        background: 'transparent',
+        textShadow: 'none',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+    },
+    comment: { color: '#0B6A0B', fontStyle: 'italic' },
+    prolog: { color: '#0B6A0B', fontStyle: 'italic' },
+    doctype: { color: '#0B6A0B', fontStyle: 'italic' },
+    cdata: { color: '#0B6A0B', fontStyle: 'italic' },
+    punctuation: { color: '#000000' },
+    property: { color: '#9A1B1B' },
+    tag: { color: '#9A1B1B' },
+    boolean: { color: '#9A1B1B' },
+    number: { color: '#9A1B1B' },
+    constant: { color: '#9A1B1B' },
+    symbol: { color: '#9A1B1B' },
+    deleted: { color: '#9A1B1B' },
+    selector: { color: '#0052CC' },
+    'attr-name': { color: '#0052CC' },
+    string: { color: '#0052CC' },
+    char: { color: '#0052CC' },
+    builtin: { color: '#0052CC' },
+    inserted: { color: '#0052CC' },
+    operator: { color: '#6A1B9A' },
+    entity: { color: '#6A1B9A' },
+    url: { color: '#6A1B9A' },
+    variable: { color: '#6A1B9A' },
+    atrule: { color: '#B34700' },
+    'attr-value': { color: '#B34700' },
+    function: { color: '#B34700' },
+    'class-name': { color: '#B34700' },
+    keyword: { color: '#7A1FA2' },
+    regex: { color: '#C41A16' },
+    important: { color: '#C41A16', fontWeight: '700' },
+    bold: { fontWeight: '700' },
+    italic: { fontStyle: 'italic' },
+};
 
 const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting }) => {
     const [isExpanded, setIsExpanded] = useState(true);
@@ -79,6 +130,13 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting }) =
         return stored !== 'false';
     });
     const [overlayOpacity] = useUiOpacitySetting(OVERLAY_OPACITY_KEY, DEFAULT_OVERLAY_OPACITY);
+    const [overlayFontSize] = useOverlayFontSizeSetting(OVERLAY_FONT_SIZE_KEY, DEFAULT_OVERLAY_FONT_SIZE);
+    const [overlayWindowSettings, setOverlayWindowSettings] = useState<OverlayWindowSettings | null>(null);
+    const diagnosticsRef = useRef<OverlayDiagnostics | null>(
+        FEATURES.OVERLAY_DIAGNOSTICS_ENABLED ? new OverlayDiagnostics() : null
+    );
+    const resizeAnimationFrameRef = useRef<number | null>(null);
+    const queuedResizeRef = useRef<{ width: number; height: number } | null>(null);
 
     // Analytics State
     const requestStartTimeRef = useRef<number | null>(null);
@@ -170,6 +228,96 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting }) =
         localStorage.setItem('natively_hideChatHidesWidget', String(hideChatHidesWidget));
     }, [isUndetectable, hideChatHidesWidget]);
 
+    useEffect(() => {
+        if (!FEATURES.OVERLAY_UI_V2_ENABLED) return;
+        window.electronAPI.getOverlaySettings()
+            .then((settings) => setOverlayWindowSettings(settings))
+            .catch((error) => console.error('[NativelyInterface] Failed to load overlay settings:', error));
+    }, []);
+
+    const queueOverlayResize = (width: number, height: number) => {
+        queuedResizeRef.current = { width, height };
+        if (resizeAnimationFrameRef.current !== null) return;
+        resizeAnimationFrameRef.current = window.requestAnimationFrame(() => {
+            resizeAnimationFrameRef.current = null;
+            const queued = queuedResizeRef.current;
+            if (!queued) return;
+            window.electronAPI.setOverlayManualSize({ width: queued.width, height: queued.height })
+                .then((settings) => {
+                    setOverlayWindowSettings(settings);
+                })
+                .catch((error) => {
+                    console.error('[NativelyInterface] Failed to resize overlay:', error);
+                });
+        });
+    };
+
+    const handleOverlayResizeStart = (edge: 'left' | 'right' | 'bottom') => (event: React.MouseEvent<HTMLDivElement>) => {
+        event.preventDefault();
+
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startWidth = overlayWindowSettings?.width ?? window.innerWidth;
+        const startHeight = overlayWindowSettings?.height ?? window.innerHeight;
+        const minWidth = overlayWindowSettings?.minWidth ?? 420;
+        const minHeight = overlayWindowSettings?.minHeight ?? 220;
+        const maxWidth = overlayWindowSettings?.maxWidth ?? Math.max(minWidth, startWidth);
+        const maxHeight = overlayWindowSettings?.maxHeight ?? Math.max(minHeight, startHeight);
+        const previousCursor = document.body.style.cursor;
+        const resizeCursor = edge === 'bottom' ? 'ns-resize' : 'ew-resize';
+
+        document.body.style.cursor = resizeCursor;
+        document.body.style.userSelect = 'none';
+
+        const handleMouseMove = (moveEvent: MouseEvent) => {
+            const deltaX = moveEvent.clientX - startX;
+            const deltaY = moveEvent.clientY - startY;
+
+            let nextWidth = startWidth;
+            let nextHeight = startHeight;
+
+            if (edge === 'left') {
+                nextWidth = Math.min(Math.max(startWidth - deltaX, minWidth), maxWidth);
+            } else if (edge === 'right') {
+                nextWidth = Math.min(Math.max(startWidth + deltaX, minWidth), maxWidth);
+            } else {
+                nextHeight = Math.min(Math.max(startHeight + deltaY, minHeight), maxHeight);
+            }
+
+            queueOverlayResize(Math.round(nextWidth), Math.round(nextHeight));
+        };
+
+        const handleMouseUp = () => {
+            document.body.style.cursor = previousCursor;
+            document.body.style.userSelect = '';
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+    };
+
+    useEffect(() => {
+        if (isExpanded) {
+            diagnosticsRef.current?.markVisible();
+        }
+    }, [isExpanded]);
+
+    useEffect(() => {
+        return () => {
+            if (!FEATURES.OVERLAY_DIAGNOSTICS_ENABLED) return;
+            const snapshot = diagnosticsRef.current?.snapshot();
+            if (snapshot) {
+                console.log('[OverlayDiagnostics]', snapshot);
+            }
+            if (resizeAnimationFrameRef.current !== null) {
+                window.cancelAnimationFrame(resizeAnimationFrameRef.current);
+                resizeAnimationFrameRef.current = null;
+            }
+        };
+    }, []);
+
     // Auto-resize Window
     useLayoutEffect(() => {
         if (!contentRef.current) return;
@@ -182,6 +330,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting }) =
                 // Send exact dimensions to Electron
                 // Removed buffer to ensure tight fit
                 console.log('[NativelyInterface] ResizeObserver:', Math.ceil(rect.width), Math.ceil(rect.height));
+                diagnosticsRef.current?.markResize();
                 window.electronAPI?.updateContentDimensions({
                     width: Math.ceil(rect.width),
                     height: Math.ceil(rect.height)
@@ -200,6 +349,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting }) =
         requestAnimationFrame(() => {
             if (!contentRef.current) return;
             const rect = contentRef.current.getBoundingClientRect();
+            diagnosticsRef.current?.markResize();
             window.electronAPI?.updateContentDimensions({
                 width: Math.ceil(rect.width),
                 height: Math.ceil(rect.height)
@@ -212,6 +362,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting }) =
         const timer = setTimeout(() => {
             if (contentRef.current) {
                 const rect = contentRef.current.getBoundingClientRect();
+                diagnosticsRef.current?.markResize();
                 window.electronAPI?.updateContentDimensions({
                     width: Math.ceil(rect.width),
                     height: Math.ceil(rect.height)
@@ -628,12 +779,6 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting }) =
 
     // Quick Actions - Updated to use new Intelligence APIs
 
-    const handleCopy = (text: string) => {
-        navigator.clipboard.writeText(text);
-        analytics.trackCopyAnswer();
-        // Optional: Trigger a small toast or state change for visual feedback
-    };
-
     const handleWhatToSay = async () => {
         setIsExpanded(true);
         setIsProcessing(true);
@@ -728,6 +873,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting }) =
 
         // Stream Token
         cleanups.push(window.electronAPI.onGeminiStreamToken((token) => {
+            diagnosticsRef.current?.markStreamToken();
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
                 // Should we be updating the last message or finding the specific streaming one?
@@ -808,6 +954,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting }) =
         // JIT RAG Stream listeners (for live meeting RAG responses)
         if (window.electronAPI.onRAGStreamChunk) {
             cleanups.push(window.electronAPI.onRAGStreamChunk((data: { chunk: string }) => {
+                diagnosticsRef.current?.markStreamToken();
                 setMessages(prev => {
                     const lastMsg = prev[prev.length - 1];
                     if (lastMsg && lastMsg.isStreaming && lastMsg.role === 'system') {
@@ -1068,12 +1215,11 @@ Provide only the answer, nothing else.`;
         if (msg.isCode || (msg.role === 'system' && msg.text.includes('```'))) {
             const parts = msg.text.split(/(```[\s\S]*?```)/g);
             return (
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3 my-1">
-                    <div className="flex items-center gap-2 mb-2 text-purple-300 font-semibold text-xs uppercase tracking-wide">
-                        <Code className="w-3.5 h-3.5" />
+                <div className="py-0.5">
+                    <div className="mb-0.5 text-black font-bold text-[10px] uppercase tracking-wide">
                         <span>Code Solution</span>
                     </div>
-                    <div className="space-y-2 text-slate-200 text-[13px] leading-relaxed">
+                    <div className="space-y-1 text-text-primary text-[0.95em] leading-relaxed font-bold">
                         {parts.map((part, i) => {
                             if (part.startsWith('```')) {
                                 const match = part.match(/```(\w+)?\n?([\s\S]*?)```/);
@@ -1081,29 +1227,36 @@ Provide only the answer, nothing else.`;
                                     const lang = match[1] || 'python';
                                     const code = match[2].trim();
                                     return (
-                                        <div key={i} className="my-3 rounded-xl overflow-hidden border border-white/[0.08] shadow-lg bg-zinc-800/60 backdrop-blur-md">
-                                            {/* Minimalist Apple Header */}
-                                            <div className="bg-white/[0.04] px-3 py-1.5 border-b border-white/[0.08]">
-                                                <span className="text-[10px] uppercase tracking-widest font-semibold text-white/40 font-mono">
+                                        <div key={i} className="my-1 overflow-hidden border border-black rounded-sm px-2 pt-1 pb-1" style={overlayStrongCardStyle}>
+                                            <div className="h-px bg-black/90 mb-1" />
+                                            <div className="py-0.5 border-b border-black">
+                                                <span className="text-[9px] uppercase tracking-wide font-bold text-black font-mono">
                                                     {lang || 'CODE'}
                                                 </span>
                                             </div>
                                             <div className="bg-transparent">
                                                 <SyntaxHighlighter
                                                     language={lang}
-                                                    style={vscDarkPlus}
+                                                    style={HIGH_CONTRAST_CODE_THEME}
                                                     customStyle={{
                                                         margin: 0,
                                                         borderRadius: 0,
-                                                        fontSize: '13px',
-                                                        lineHeight: '1.6',
+                                                        fontSize: `${Math.max(12, (overlayFontSize - 1))}px`,
+                                                        lineHeight: String(Math.max(1.45, 1.4 + overlayFontScale * 0.08)),
                                                         background: 'transparent',
-                                                        padding: '16px',
-                                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+                                                        padding: '4px 0 6px',
+                                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                                        fontWeight: 700
                                                     }}
                                                     wrapLongLines={true}
                                                     showLineNumbers={true}
-                                                    lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: 'rgba(255,255,255,0.2)', textAlign: 'right', fontSize: '11px' }}
+                                                    lineNumberStyle={{
+                                                        minWidth: '1.6em',
+                                                        paddingRight: '0.5em',
+                                                        color: '#000000',
+                                                        textAlign: 'right',
+                                                        fontSize: `${Math.max(10, overlayFontSize - 3)}px`
+                                                    }}
                                                 >
                                                     {code}
                                                 </SyntaxHighlighter>
@@ -1114,23 +1267,23 @@ Provide only the answer, nothing else.`;
                             }
                             // Regular text - Render with Markdown
                             return (
-                                <div key={i} className="markdown-content">
+                                <div key={i} className="markdown-content font-bold">
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm, remarkMath]}
                                         rehypePlugins={[rehypeKatex]}
                                         components={{
-                                            p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0 whitespace-pre-wrap" {...props} />,
-                                            strong: ({ node, ...props }: any) => <strong className="font-bold text-white" {...props} />,
-                                            em: ({ node, ...props }: any) => <em className="italic text-slate-300" {...props} />,
-                                            ul: ({ node, ...props }: any) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
-                                            ol: ({ node, ...props }: any) => <ol className="list-decimal ml-4 mb-2 space-y-1" {...props} />,
+                                            p: ({ node, ...props }: any) => <p className="mb-1 last:mb-0 whitespace-pre-wrap font-bold" {...props} />,
+                                            strong: ({ node, ...props }: any) => <strong className="font-bold text-text-primary" {...props} />,
+                                            em: ({ node, ...props }: any) => <em className="italic text-text-primary" {...props} />,
+                                            ul: ({ node, ...props }: any) => <ul className="list-disc ml-3 mb-1 space-y-0.5" {...props} />,
+                                            ol: ({ node, ...props }: any) => <ol className="list-decimal ml-3 mb-1 space-y-0.5" {...props} />,
                                             li: ({ node, ...props }: any) => <li className="pl-1" {...props} />,
-                                            h1: ({ node, ...props }: any) => <h1 className="text-lg font-bold text-white mb-2 mt-3" {...props} />,
-                                            h2: ({ node, ...props }: any) => <h2 className="text-base font-bold text-white mb-2 mt-3" {...props} />,
-                                            h3: ({ node, ...props }: any) => <h3 className="text-sm font-bold text-white mb-1 mt-2" {...props} />,
-                                            code: ({ node, ...props }: any) => <code className="bg-slate-700/50 rounded px-1 py-0.5 text-xs font-mono text-purple-200 whitespace-pre-wrap" {...props} />,
-                                            blockquote: ({ node, ...props }: any) => <blockquote className="border-l-2 border-purple-500/50 pl-3 italic text-slate-400 my-2" {...props} />,
-                                            a: ({ node, ...props }: any) => <a className="text-blue-400 hover:text-blue-300 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
+                                            h1: ({ node, ...props }: any) => <h1 className="text-sm font-bold text-text-primary mb-1 mt-2" {...props} />,
+                                            h2: ({ node, ...props }: any) => <h2 className="text-sm font-bold text-text-primary mb-1 mt-2" {...props} />,
+                                            h3: ({ node, ...props }: any) => <h3 className="text-[12px] font-bold text-text-primary mb-1 mt-1.5" {...props} />,
+                                            code: ({ node, ...props }: any) => <code className="px-0.5 text-[11px] font-mono text-accent-primary whitespace-pre-wrap" {...props} />,
+                                            blockquote: ({ node, ...props }: any) => <blockquote className="border-l border-accent-primary/60 pl-2 italic text-text-primary my-1" {...props} />,
+                                            a: ({ node, ...props }: any) => <a className="text-accent-primary hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
                                         }}
                                     >
                                         {part}
@@ -1146,16 +1299,16 @@ Provide only the answer, nothing else.`;
         // Custom Styled Labels (Shorten, Recap, Follow-up) - also use Markdown for content
         if (msg.intent === 'shorten') {
             return (
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3 my-1">
-                    <div className="flex items-center gap-2 mb-2 text-cyan-300 font-semibold text-xs uppercase tracking-wide">
-                        <MessageSquare className="w-3.5 h-3.5" />
+                <div className="py-0.5">
+                    <div className="flex items-center gap-1 mb-0.5 text-cyan-300 font-semibold text-[10px] uppercase tracking-wide">
+                        <MessageSquare className="w-3 h-3" />
                         <span>Shortened</span>
                     </div>
-                    <div className="text-slate-200 text-[13px] leading-relaxed markdown-content">
+                    <div className="text-text-primary text-[0.95em] leading-relaxed markdown-content font-bold">
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={{
-                            p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0" {...props} />,
+                            p: ({ node, ...props }: any) => <p className="mb-1 last:mb-0 font-bold" {...props} />,
                             strong: ({ node, ...props }: any) => <strong className="font-bold text-cyan-100" {...props} />,
-                            ul: ({ node, ...props }: any) => <ul className="list-disc ml-4 mb-2" {...props} />,
+                            ul: ({ node, ...props }: any) => <ul className="list-disc ml-3 mb-1" {...props} />,
                             li: ({ node, ...props }: any) => <li className="pl-1" {...props} />,
                         }}>
                             {msg.text}
@@ -1167,16 +1320,16 @@ Provide only the answer, nothing else.`;
 
         if (msg.intent === 'recap') {
             return (
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3 my-1">
-                    <div className="flex items-center gap-2 mb-2 text-indigo-300 font-semibold text-xs uppercase tracking-wide">
-                        <RefreshCw className="w-3.5 h-3.5" />
+                <div className="py-0.5">
+                    <div className="flex items-center gap-1 mb-0.5 text-indigo-300 font-semibold text-[10px] uppercase tracking-wide">
+                        <RefreshCw className="w-3 h-3" />
                         <span>Recap</span>
                     </div>
-                    <div className="text-slate-200 text-[13px] leading-relaxed markdown-content">
+                    <div className="text-text-primary text-[0.95em] leading-relaxed markdown-content font-bold">
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={{
-                            p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0" {...props} />,
+                            p: ({ node, ...props }: any) => <p className="mb-1 last:mb-0 font-bold" {...props} />,
                             strong: ({ node, ...props }: any) => <strong className="font-bold text-indigo-100" {...props} />,
-                            ul: ({ node, ...props }: any) => <ul className="list-disc ml-4 mb-2" {...props} />,
+                            ul: ({ node, ...props }: any) => <ul className="list-disc ml-3 mb-1" {...props} />,
                             li: ({ node, ...props }: any) => <li className="pl-1" {...props} />,
                         }}>
                             {msg.text}
@@ -1188,16 +1341,16 @@ Provide only the answer, nothing else.`;
 
         if (msg.intent === 'follow_up_questions') {
             return (
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3 my-1">
-                    <div className="flex items-center gap-2 mb-2 text-[#FFD60A] font-semibold text-xs uppercase tracking-wide">
-                        <HelpCircle className="w-3.5 h-3.5" />
+                <div className="py-0.5">
+                    <div className="flex items-center gap-1 mb-0.5 text-[#FFD60A] font-semibold text-[10px] uppercase tracking-wide">
+                        <HelpCircle className="w-3 h-3" />
                         <span>Follow-Up Questions</span>
                     </div>
-                    <div className="text-slate-200 text-[13px] leading-relaxed markdown-content">
+                    <div className="text-text-primary text-[0.95em] leading-relaxed markdown-content font-bold">
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={{
-                            p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0" {...props} />,
+                            p: ({ node, ...props }: any) => <p className="mb-1 last:mb-0 font-bold" {...props} />,
                             strong: ({ node, ...props }: any) => <strong className="font-bold text-[#FFF9C4]" {...props} />,
-                            ul: ({ node, ...props }: any) => <ul className="list-disc ml-4 mb-2" {...props} />,
+                            ul: ({ node, ...props }: any) => <ul className="list-disc ml-3 mb-1" {...props} />,
                             li: ({ node, ...props }: any) => <li className="pl-1" {...props} />,
                         }}>
                             {msg.text}
@@ -1212,11 +1365,11 @@ Provide only the answer, nothing else.`;
             const parts = msg.text.split(/(```[\s\S]*?(?:```|$))/g);
 
             return (
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3 my-1">
-                    <div className="flex items-center gap-2 mb-2 text-emerald-400 font-semibold text-xs uppercase tracking-wide">
+                <div className="py-0.5">
+                    <div className="flex items-center gap-1 mb-0.5 text-emerald-400 font-semibold text-[10px] uppercase tracking-wide">
                         <span>Say this</span>
                     </div>
-                    <div className="text-slate-100 text-[14px] leading-relaxed">
+                    <div className="text-text-primary text-[1em] leading-relaxed font-bold">
                         {parts.map((part, i) => {
                             if (part.startsWith('```')) {
                                 // Robust matching: handles unclosed blocks for streaming (```...$)
@@ -1235,10 +1388,10 @@ Provide only the answer, nothing else.`;
                                     }
 
                                     return (
-                                        <div key={i} className="my-3 rounded-xl overflow-hidden border border-white/[0.08] shadow-lg bg-zinc-800/60 backdrop-blur-md">
-                                            {/* Minimalist Apple Header */}
-                                            <div className="bg-white/[0.04] px-3 py-1.5 border-b border-white/[0.08]">
-                                                <span className="text-[10px] uppercase tracking-widest font-semibold text-white/40 font-mono">
+                                        <div key={i} className="my-1 overflow-hidden border border-black rounded-sm px-2 pt-1 pb-1" style={overlayStrongCardStyle}>
+                                            <div className="h-px bg-black/90 mb-1" />
+                                            <div className="py-0.5 border-b border-black">
+                                                <span className="text-[9px] uppercase tracking-wide font-bold text-black font-mono">
                                                     {lang || 'CODE'}
                                                 </span>
                                             </div>
@@ -1246,19 +1399,26 @@ Provide only the answer, nothing else.`;
                                             <div className="bg-transparent">
                                                 <SyntaxHighlighter
                                                     language={lang}
-                                                    style={vscDarkPlus}
+                                                    style={HIGH_CONTRAST_CODE_THEME}
                                                     customStyle={{
                                                         margin: 0,
                                                         borderRadius: 0,
-                                                        fontSize: '13px',
-                                                        lineHeight: '1.6',
+                                                        fontSize: `${Math.max(12, (overlayFontSize - 1))}px`,
+                                                        lineHeight: String(Math.max(1.45, 1.4 + overlayFontScale * 0.08)),
                                                         background: 'transparent',
-                                                        padding: '16px',
-                                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+                                                        padding: '4px 0 6px',
+                                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                                        fontWeight: 700
                                                     }}
                                                     wrapLongLines={true}
                                                     showLineNumbers={true}
-                                                    lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: 'rgba(255,255,255,0.2)', textAlign: 'right', fontSize: '11px' }}
+                                                    lineNumberStyle={{
+                                                        minWidth: '1.6em',
+                                                        paddingRight: '0.5em',
+                                                        color: '#000000',
+                                                        textAlign: 'right',
+                                                        fontSize: `${Math.max(10, overlayFontSize - 3)}px`
+                                                    }}
                                                 >
                                                     {code}
                                                 </SyntaxHighlighter>
@@ -1269,16 +1429,16 @@ Provide only the answer, nothing else.`;
                             }
                             // Regular text - Render Markdown
                             return (
-                                <div key={i} className="markdown-content">
+                                <div key={i} className="markdown-content font-bold">
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm, remarkMath]}
                                         rehypePlugins={[rehypeKatex]}
                                         components={{
-                                            p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0" {...props} />,
+                                            p: ({ node, ...props }: any) => <p className="mb-1 last:mb-0 font-bold" {...props} />,
                                             strong: ({ node, ...props }: any) => <strong className="font-bold text-emerald-100" {...props} />,
                                             em: ({ node, ...props }: any) => <em className="italic text-emerald-200/80" {...props} />,
-                                            ul: ({ node, ...props }: any) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
-                                            ol: ({ node, ...props }: any) => <ol className="list-decimal ml-4 mb-2 space-y-1" {...props} />,
+                                            ul: ({ node, ...props }: any) => <ul className="list-disc ml-3 mb-1 space-y-0.5" {...props} />,
+                                            ol: ({ node, ...props }: any) => <ol className="list-decimal ml-3 mb-1 space-y-0.5" {...props} />,
                                             li: ({ node, ...props }: any) => <li className="pl-1" {...props} />,
                                         }}
                                     >
@@ -1295,18 +1455,18 @@ Provide only the answer, nothing else.`;
         // Standard Text Messages (e.g. from User or Interviewer)
         // We still want basic markdown support here too
         return (
-            <div className="markdown-content">
+            <div className="markdown-content font-bold">
                 <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}
                     rehypePlugins={[rehypeKatex]}
                     components={{
-                        p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0 whitespace-pre-wrap" {...props} />,
+                        p: ({ node, ...props }: any) => <p className="mb-1 last:mb-0 whitespace-pre-wrap font-bold" {...props} />,
                         strong: ({ node, ...props }: any) => <strong className="font-bold opacity-100" {...props} />,
                         em: ({ node, ...props }: any) => <em className="italic opacity-90" {...props} />,
-                        ul: ({ node, ...props }: any) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
-                        ol: ({ node, ...props }: any) => <ol className="list-decimal ml-4 mb-2 space-y-1" {...props} />,
+                        ul: ({ node, ...props }: any) => <ul className="list-disc ml-3 mb-1 space-y-0.5" {...props} />,
+                        ol: ({ node, ...props }: any) => <ol className="list-decimal ml-3 mb-1 space-y-0.5" {...props} />,
                         li: ({ node, ...props }: any) => <li className="pl-1" {...props} />,
-                        code: ({ node, ...props }: any) => <code className="bg-black/20 rounded px-1 py-0.5 text-xs font-mono" {...props} />,
+                        code: ({ node, ...props }: any) => <code className="px-0.5 text-[11px] font-mono text-accent-primary" {...props} />,
                         a: ({ node, ...props }: any) => <a className="underline hover:opacity-80" target="_blank" rel="noopener noreferrer" {...props} />,
                     }}
                 >
@@ -1487,8 +1647,54 @@ Provide only the answer, nothing else.`;
         return () => window.removeEventListener('keydown', handleGeneralKeyDown);
     }, [isShortcutPressed]);
 
+    const toggleVisibilityLabel = shortcuts.toggleVisibility.join(' + ');
+    const endSessionLabel = shortcuts.endSession.join(' + ');
+    const overlayFontScale = overlayFontSize / DEFAULT_OVERLAY_FONT_SIZE;
+    const overlaySurfaceColor = `rgb(from var(--bg-card) r g b / ${overlayOpacity})`;
+    const overlayBorderColor = 'rgba(0,0,0,0.95)';
+
+    const overlayCardStyle = {
+        backgroundColor: 'transparent',
+        borderColor: overlayBorderColor
+    };
+    const overlayStrongCardStyle = {
+        backgroundColor: 'transparent',
+        borderColor: overlayBorderColor
+    };
+    const overlayInteractiveStyle = {
+        backgroundColor: 'transparent',
+        borderColor: overlayBorderColor
+    };
+    const overlayInputSurfaceStyle = {
+        backgroundColor: 'transparent',
+        borderColor: overlayBorderColor
+    };
+    const overlayLiveBubbleStyle = {
+        backgroundColor: 'transparent',
+        borderColor: `rgb(16 185 129 / ${Math.max(0.12, Math.min(0.34, overlayOpacity * 0.34))})`
+    };
+    const overlayMutedSendStyle = {
+        backgroundColor: 'transparent'
+    };
+    const overlayFontFamily = "'SF Pro Display', 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif";
+    const quickActionClassName = "flex items-center gap-1 px-1.5 py-1 rounded border border-black text-[11px] font-bold text-black hover:text-black transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0";
+    const overlayRootStyle = {
+        fontFamily: overlayFontFamily,
+        fontSize: `${overlayFontSize}px`,
+        fontWeight: 700,
+        color: '#000000',
+        '--text-primary': '#000000',
+        '--text-secondary': '#000000',
+        '--text-tertiary': '#000000',
+        '--border-muted': 'rgba(0,0,0,0.72)',
+    } as React.CSSProperties;
+
     return (
-        <div ref={contentRef} className="flex flex-col items-center w-fit mx-auto h-fit min-h-0 bg-transparent p-0 rounded-[24px] font-sans text-slate-200 gap-2">
+        <div
+            ref={contentRef}
+            className="flex flex-col items-center w-full h-full min-h-0 bg-transparent p-0 text-text-primary gap-1"
+            style={overlayRootStyle}
+        >
 
             <AnimatePresence>
                 {isExpanded && (
@@ -1497,28 +1703,47 @@ Provide only the answer, nothing else.`;
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 20, scale: 0.95 }}
                         transition={{ duration: 0.3, ease: "easeInOut" }}
-                        className="flex flex-col items-center gap-2 w-full"
+                        className="flex flex-col items-center gap-1 w-full"
                     >
                         <TopPill
                             expanded={isExpanded}
                             onToggle={() => setIsExpanded(!isExpanded)}
                             onQuit={() => onEndMeeting ? onEndMeeting() : window.electronAPI.quitApp()}
                             backgroundOpacity={overlayOpacity}
+                            textScale={overlayFontScale}
                         />
-                        <div className="
-                    relative w-[600px] max-w-full
-                    backdrop-blur-2xl
-                    border border-white/10
-                    shadow-2xl shadow-black/40
-                    rounded-[24px] 
-                    overflow-hidden 
+                        <div
+                            className="
+                    relative w-full max-w-[calc(100vw-24px)]
+                    backdrop-blur-xl
+                    border border-border-muted
+                    rounded-[14px]
+                    overflow-hidden
                     flex flex-col
                     draggable-area
-                ">
+                "
+                            style={{ borderColor: overlayBorderColor }}
+                        >
                             <div
                                 className="absolute inset-0 pointer-events-none"
-                                style={{ backgroundColor: `rgba(30, 30, 30, ${overlayOpacity})` }}
+                                style={{ backgroundColor: overlaySurfaceColor }}
                             />
+                            {FEATURES.OVERLAY_UI_V2_ENABLED && (
+                                <>
+                                    <div
+                                        className="absolute inset-y-0 left-0 z-30 w-1.5 cursor-ew-resize no-drag"
+                                        onMouseDown={handleOverlayResizeStart('left')}
+                                    />
+                                    <div
+                                        className="absolute inset-y-0 right-0 z-30 w-1.5 cursor-ew-resize no-drag"
+                                        onMouseDown={handleOverlayResizeStart('right')}
+                                    />
+                                    <div
+                                        className="absolute inset-x-0 bottom-0 z-30 h-1.5 cursor-ns-resize no-drag"
+                                        onMouseDown={handleOverlayResizeStart('bottom')}
+                                    />
+                                </>
+                            )}
 
 
 
@@ -1528,49 +1753,51 @@ Provide only the answer, nothing else.`;
                                 <RollingTranscript
                                     text={rollingTranscript}
                                     isActive={isInterviewerSpeaking}
+                                    textScale={overlayFontScale}
                                 />
+                            )}
+
+                            {overlayWindowSettings?.strictPassiveMode && (
+                                <div className="mx-1.5 mt-1 no-drag">
+                                    <p className="text-[11px] text-text-primary">
+                                        Mouse passthrough is on. Use <span className="font-semibold text-text-primary">{toggleVisibilityLabel}</span> to hide/show overlay or <span className="font-semibold text-text-primary">{endSessionLabel}</span> to end session.
+                                    </p>
+                                </div>
                             )}
 
                             {/* Chat History - Only show if there are messages OR active states */}
                             {(messages.length > 0 || isManualRecording || isProcessing) && (
-                                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[clamp(300px,35vh,450px)] no-drag" style={{ scrollbarWidth: 'none' }}>
+                                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-1.5 space-y-1 max-h-[clamp(280px,34vh,420px)] no-drag" style={{ scrollbarWidth: 'none' }}>
                                     {messages.map((msg) => (
                                         <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
-                                            <div className={`
-                      ${msg.role === 'user' ? 'max-w-[72.25%] px-[13.6px] py-[10.2px]' : 'max-w-[85%] px-4 py-3'} text-[14px] leading-relaxed relative group whitespace-pre-wrap
+                                            <div
+                                                className={`
+                      ${msg.role === 'user' ? 'max-w-[88%] px-1.5 py-1' : 'max-w-[95%] px-1 py-0.5'} text-[1em] leading-relaxed relative group whitespace-pre-wrap
                       ${msg.role === 'user'
-                                                    ? 'bg-blue-600/20 backdrop-blur-md border border-blue-500/30 text-blue-100 rounded-[20px] rounded-tr-[4px] shadow-sm font-medium'
+                                                    ? 'text-text-primary font-bold'
                                                     : ''
                                                 }
                       ${msg.role === 'system'
-                                                    ? 'text-slate-200 font-normal'
+                                                    ? 'text-text-primary font-bold'
                                                     : ''
                                                 }
                       ${msg.role === 'interviewer'
-                                                    ? 'text-white/40 italic pl-0 text-[13px]'
+                                                    ? 'text-text-primary italic pl-0 text-[13px]'
                                                     : ''
                                                 }
-                    `}>
+                    `}
+                                            >
                                                 {msg.role === 'interviewer' && (
-                                                    <div className="flex items-center gap-1.5 mb-1 text-[10px] text-slate-600 font-medium uppercase tracking-wider">
+                                                    <div className="flex items-center gap-1 mb-0.5 text-[10px] text-text-primary font-semibold uppercase tracking-wide">
                                                         Interviewer
                                                         {msg.isStreaming && <span className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />}
                                                     </div>
                                                 )}
                                                 {msg.role === 'user' && msg.hasScreenshot && (
-                                                    <div className="flex items-center gap-1 text-[10px] opacity-70 mb-1 border-b border-white/10 pb-1">
+                                                    <div className="flex items-center gap-1 text-[10px] text-text-primary mb-0.5">
                                                         <Image className="w-2.5 h-2.5" />
                                                         <span>Screenshot attached</span>
                                                     </div>
-                                                )}
-                                                {msg.role === 'system' && !msg.isStreaming && (
-                                                    <button
-                                                        onClick={() => handleCopy(msg.text)}
-                                                        className="absolute top-2 right-2 p-1.5 bg-black/40 hover:bg-black/60 text-slate-400 hover:text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        title="Copy to clipboard"
-                                                    >
-                                                        <Copy className="w-3.5 h-3.5" />
-                                                    </button>
                                                 )}
                                                 {renderMessageText(msg)}
                                             </div>
@@ -1582,27 +1809,27 @@ Provide only the answer, nothing else.`;
                                         <div className="flex flex-col items-end gap-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                             {/* Live transcription preview */}
                                             {(manualTranscript || voiceInput) && (
-                                                <div className="max-w-[85%] px-3.5 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-[18px] rounded-tr-[4px]">
-                                                    <span className="text-[13px] text-emerald-300">
+                                                <div className="max-w-[95%] px-1.5 py-0.5 border-l" style={overlayLiveBubbleStyle}>
+                                                    <span className="text-[13px] text-emerald-500">
                                                         {voiceInput}{voiceInput && manualTranscript ? ' ' : ''}{manualTranscript}
                                                     </span>
                                                 </div>
                                             )}
-                                            <div className="px-3 py-2 flex gap-1.5 items-center">
+                                            <div className="px-1.5 py-0.5 flex gap-1 items-center">
                                                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                                                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                                                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                                <span className="text-[10px] text-emerald-400/70 ml-1">Listening...</span>
+                                                <span className="text-[10px] text-emerald-500 ml-1">Listening...</span>
                                             </div>
                                         </div>
                                     )}
 
                                     {isProcessing && (
                                         <div className="flex justify-start">
-                                            <div className="px-3 py-2 flex gap-1.5">
-                                                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                            <div className="px-1.5 py-0.5 flex gap-1">
+                                                <div className="w-2 h-2 bg-text-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                                <div className="w-2 h-2 bg-text-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                                <div className="w-2 h-2 bg-text-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                                             </div>
                                         </div>
                                     )}
@@ -1611,25 +1838,26 @@ Provide only the answer, nothing else.`;
                             )}
 
                             {/* Quick Actions - Minimal & Clean */}
-                            <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`}>
-                                <button onClick={handleWhatToSay} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium text-slate-400 bg-white/5 border border-white/0 hover:text-slate-200 hover:bg-white/10 hover:border-white/5 transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0">
-                                    <Pencil className="w-3 h-3 opacity-70" /> What to answer?
+                            <div className={`flex flex-nowrap justify-center items-center gap-0.5 px-1.5 pb-1.5 overflow-x-hidden ${rollingTranscript && showTranscript ? 'pt-0.5' : 'pt-1.5'}`}>
+                                <button onClick={handleWhatToSay} className={quickActionClassName} style={overlayInteractiveStyle}>
+                                    <Pencil className="w-3 h-3 text-black" /> What to answer?
                                 </button>
-                                <button onClick={() => handleFollowUp('shorten')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium text-slate-400 bg-white/5 border border-white/0 hover:text-slate-200 hover:bg-white/10 hover:border-white/5 transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0">
-                                    <MessageSquare className="w-3 h-3 opacity-70" /> Shorten
+                                <button onClick={() => handleFollowUp('shorten')} className={quickActionClassName} style={overlayInteractiveStyle}>
+                                    <MessageSquare className="w-3 h-3 text-black" /> Shorten
                                 </button>
-                                <button onClick={handleRecap} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium text-slate-400 bg-white/5 border border-white/0 hover:text-slate-200 hover:bg-white/10 hover:border-white/5 transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0">
-                                    <RefreshCw className="w-3 h-3 opacity-70" /> Recap
+                                <button onClick={handleRecap} className={quickActionClassName} style={overlayInteractiveStyle}>
+                                    <RefreshCw className="w-3 h-3 text-black" /> Recap
                                 </button>
-                                <button onClick={handleFollowUpQuestions} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium text-slate-400 bg-white/5 border border-white/0 hover:text-slate-200 hover:bg-white/10 hover:border-white/5 transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0">
-                                    <HelpCircle className="w-3 h-3 opacity-70" /> Follow Up Question
+                                <button onClick={handleFollowUpQuestions} className={quickActionClassName} style={overlayInteractiveStyle}>
+                                    <HelpCircle className="w-3 h-3 text-black" /> Follow Up Question
                                 </button>
                                 <button
                                     onClick={handleAnswerNow}
-                                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all active:scale-95 duration-200 interaction-base interaction-press min-w-[74px] whitespace-nowrap shrink-0 ${isManualRecording
-                                        ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/20'
-                                        : 'bg-white/5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10'
+                                    className={`flex items-center justify-center gap-1 px-1.5 py-1 rounded text-[10px] font-bold transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0 ${isManualRecording
+                                        ? 'text-red-400'
+                                        : 'text-black border border-black hover:text-black hover:brightness-110'
                                         }`}
+                                    style={!isManualRecording ? overlayInteractiveStyle : undefined}
                                 >
                                     {isManualRecording ? (
                                         <>
@@ -1637,23 +1865,23 @@ Provide only the answer, nothing else.`;
                                             Stop
                                         </>
                                     ) : (
-                                        <><Zap className="w-3 h-3 opacity-70" /> Answer</>
+                                        <><Zap className="w-3 h-3 text-black" /> Answer</>
                                     )}
                                 </button>
                             </div>
 
                             {/* Input Area */}
-                            <div className="p-3 pt-0">
+                            <div className="px-1.5 pb-1 pt-0">
                                 {/* Latent Context Preview (Attached Screenshot) */}
                                 {attachedContext.length > 0 && (
-                                    <div className="mb-2 bg-white/5 border border-white/10 rounded-lg p-2 transition-all duration-200">
-                                        <div className="flex items-center justify-between mb-1.5">
-                                            <span className="text-[11px] font-medium text-white">
+                                    <div className="mb-1 transition-all duration-200">
+                                        <div className="flex items-center justify-between mb-0.5">
+                                            <span className="text-[10px] font-medium text-text-primary">
                                                 {attachedContext.length} screenshot{attachedContext.length > 1 ? 's' : ''} attached
                                             </span>
                                             <button
                                                 onClick={() => setAttachedContext([])}
-                                                className="p-1 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors"
+                                                className="p-0.5 hover:brightness-110 rounded text-text-primary hover:text-text-primary transition-colors"
                                                 title="Remove all"
                                             >
                                                 <X className="w-3.5 h-3.5" />
@@ -1665,19 +1893,19 @@ Provide only the answer, nothing else.`;
                                                     <img
                                                         src={ctx.preview}
                                                         alt={`Screenshot ${idx + 1}`}
-                                                        className="h-10 w-auto rounded border border-white/20"
+                                                        className="h-9 w-auto"
                                                     />
                                                     <button
                                                         onClick={() => setAttachedContext(prev => prev.filter((_, i) => i !== idx))}
-                                                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                                                        className="absolute -top-1 -right-1 w-4 h-4 text-red-400 hover:text-red-300 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                                                         title="Remove"
                                                     >
-                                                        <X className="w-2.5 h-2.5 text-white" />
+                                                        <X className="w-2.5 h-2.5 text-text-primary" />
                                                     </button>
                                                 </div>
                                             ))}
                                         </div>
-                                        <span className="text-[10px] text-slate-400">Ask a question or click Answer</span>
+                                        <span className="text-[10px] text-text-primary">Ask a question or click Answer</span>
                                     </div>
                                 )}
 
@@ -1691,32 +1919,31 @@ Provide only the answer, nothing else.`;
 
                                         className="
                                     w-full 
-                                    bg-white/10
-                                    hover:bg-white/12
-                                    focus:bg-white/14
+                                    hover:brightness-105
+                                    focus:brightness-105
                                     backdrop-blur-xl
-                                    border border-white/20
-                                    focus:border-white/30
-                                    focus:ring-1 focus:ring-white/25
-                                    rounded-xl 
-                                    pl-3 pr-10 py-2.5 
-                                    text-white
+                                    border-b border-border-muted
+                                    focus:border-accent-primary
+                                    rounded-none 
+                                    pl-1.5 pr-6 py-1.5 
+                                    text-text-primary
                                     focus:outline-none 
                                     transition-all duration-200 ease-sculpted
-                                    text-[13px] leading-relaxed
-                                    placeholder:text-slate-300/80
+                                    text-[1em] leading-relaxed
+                                    placeholder:text-text-primary
                                 "
+                                        style={overlayInputSurfaceStyle}
                                     />
 
                                     {/* Custom Rich Placeholder */}
                                     {!inputValue && (
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] text-slate-200/85">
+                                        <div className="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none text-[12px] text-text-primary">
                                             <span>Ask anything on screen or conversation, or</span>
                                             <div className="flex items-center gap-1 opacity-80">
                                                 {(shortcuts.selectiveScreenshot || ['⌘', 'Shift', 'H']).map((key, i) => (
                                                     <React.Fragment key={i}>
                                                         {i > 0 && <span className="text-[10px]">+</span>}
-                                                        <kbd className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-[10px] font-sans min-w-[20px] text-center">{key}</kbd>
+                                                        <kbd className="px-1 py-0.5 text-[10px] font-sans min-w-[14px] text-center text-text-primary">{key}</kbd>
                                                     </React.Fragment>
                                                 ))}
                                             </div>
@@ -1725,15 +1952,15 @@ Provide only the answer, nothing else.`;
                                     )}
 
                                     {!inputValue && (
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none opacity-20">
-                                            <span className="text-[10px]">↵</span>
+                                        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none opacity-20">
+                                            <span className="text-[9px]">↵</span>
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Bottom Row */}
-                                <div className="flex items-center justify-between mt-3 px-0.5">
-                                    <div className="flex items-center gap-1.5">
+                                <div className="flex items-center justify-between mt-1.5 px-0.5">
+                                    <div className="flex items-center gap-1">
                                         <button
                                             onClick={(e) => {
                                                 // Calculate position for detached window
@@ -1748,12 +1975,13 @@ Provide only the answer, nothing else.`;
                                                 window.electronAPI.toggleModelSelector({ x, y });
                                             }}
                                             className={`
-                                                flex items-center gap-2 px-3 py-1.5 
-                                                border border-white/10 rounded-lg transition-colors 
-                                                text-xs font-medium w-[140px]
+                                                flex items-center gap-1.5 px-1.5 py-1 border rounded
+                                                transition-colors
+                                                text-[11px] font-semibold w-[108px]
                                                 interaction-base interaction-press
-                                                bg-black/20 text-white/70 hover:bg-white/5 hover:text-white
+                                                text-black border-black hover:brightness-110 hover:text-black
                                             `}
+                                            style={overlayInteractiveStyle}
                                         >
                                             <span className="truncate min-w-0 flex-1">
                                                 {(() => {
@@ -1767,10 +1995,10 @@ Provide only the answer, nothing else.`;
                                                     return m;
                                                 })()}
                                             </span>
-                                            <ChevronDown size={14} className="shrink-0 transition-transform" />
+                                            <ChevronDown size={14} className="shrink-0 transition-transform text-black" />
                                         </button>
 
-                                        <div className="w-px h-3 bg-white/10 mx-1" />
+                                        <div className="w-px h-2.5 mx-0.5" style={{ backgroundColor: overlayBorderColor }} />
 
                                         {/* Settings Gear */}
                                         <div className="relative">
@@ -1798,14 +2026,15 @@ Provide only the answer, nothing else.`;
 
                                                     window.electronAPI.toggleSettingsWindow({ x, y });
                                                 }}
-                                                className={`
-                                            w-7 h-7 flex items-center justify-center rounded-lg 
+                                            className={`
+                                            w-6 h-6 flex items-center justify-center rounded border
                                             interaction-base interaction-press
-                                            ${isSettingsOpen ? 'text-white bg-white/10' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}
+                                            ${isSettingsOpen ? 'text-black border-black' : 'text-black border-black hover:text-black hover:brightness-110'}
                                         `}
+                                                style={overlayInteractiveStyle}
                                                 title="Settings"
                                             >
-                                                <SlidersHorizontal className="w-3.5 h-3.5" />
+                                                <SlidersHorizontal className="w-3 h-3" />
                                             </button>
                                         </div>
 
@@ -1814,16 +2043,17 @@ Provide only the answer, nothing else.`;
                                     <button
                                         onClick={handleManualSubmit}
                                         disabled={!inputValue.trim()}
-                                        className={`
-                                    w-7 h-7 rounded-full flex items-center justify-center 
+                                    className={`
+                                    w-6 h-6 rounded flex items-center justify-center 
                                     interaction-base interaction-press
                                     ${inputValue.trim()
-                                                ? 'bg-[#007AFF] text-white shadow-lg shadow-blue-500/20 hover:bg-[#0071E3]'
-                                                : 'bg-white/5 text-white/10 cursor-not-allowed'
-                                            }
+                                        ? 'text-accent-primary hover:text-text-primary'
+                                        : 'text-text-primary/80 cursor-not-allowed'
+                                    }
                                 `}
+                                    style={!inputValue.trim() ? overlayMutedSendStyle : undefined}
                                     >
-                                        <ArrowRight className="w-3.5 h-3.5" />
+                                        <ArrowRight className="w-3 h-3" />
                                     </button>
                                 </div>
                             </div>

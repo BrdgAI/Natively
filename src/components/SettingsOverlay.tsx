@@ -5,7 +5,7 @@ import {
     ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
     Camera, RotateCcw, Eye, Layout, MessageSquare, Crop,
     ChevronDown, Check, BadgeCheck, Power, Palette, Calendar, Ghost, Sun, Moon, RefreshCw, Info, Globe, FlaskConical, Terminal, Settings, Activity, ExternalLink, Trash2,
-    Sparkles, Pencil, Briefcase, Building2, Search, MapPin, CheckCircle
+    Sparkles, Pencil, Briefcase, Building2, Search, MapPin, CheckCircle, Type
 } from 'lucide-react';
 import { analytics } from '../lib/analytics/analytics.service';
 import { AboutSection } from './AboutSection';
@@ -21,6 +21,9 @@ import {
     percentToOpacity,
     OVERLAY_OPACITY_KEY
 } from '../lib/uiTransparency';
+import { useOverlayFontSizeSetting } from '../hooks/useOverlayFontSizeSetting';
+import { DEFAULT_OVERLAY_FONT_SIZE, OVERLAY_FONT_SIZE_KEY } from '../lib/uiTypography';
+import type { OverlayMonitorInfo, OverlayWindowSettings } from '../types/electron';
 
 interface CustomSelectProps {
     label: string;
@@ -230,6 +233,19 @@ interface SettingsOverlayProps {
     initialTab?: string;
 }
 
+interface OverlaySizePreset {
+    id: 'compact' | 'balanced' | 'large';
+    label: string;
+    widthRatio: number;
+    heightRatio: number;
+}
+
+const OVERLAY_SIZE_PRESETS: OverlaySizePreset[] = [
+    { id: 'compact', label: 'Compact', widthRatio: 0.52, heightRatio: 0.45 },
+    { id: 'balanced', label: 'Balanced', widthRatio: 0.68, heightRatio: 0.62 },
+    { id: 'large', label: 'Large', widthRatio: 0.82, heightRatio: 0.78 }
+];
+
 const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, initialTab = 'general' }) => {
     const [activeTab, setActiveTab] = useState(initialTab);
     
@@ -293,6 +309,27 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     }, [isOpen]);
 
     useEffect(() => {
+        if (!isOpen) return;
+
+        const loadOverlayControls = async () => {
+            try {
+                const [settings, monitors] = await Promise.all([
+                    window.electronAPI.getOverlaySettings(),
+                    window.electronAPI.listOverlayMonitors()
+                ]);
+                setOverlayWindowSettings(settings);
+                setOverlayMonitors(monitors);
+                setSelectedOverlayMonitorId(settings.preferredMonitorId ?? 'auto');
+                setStrictPassiveMode(settings.strictPassiveMode);
+            } catch (error) {
+                console.error('[SettingsOverlay] Failed to load overlay controls:', error);
+            }
+        };
+
+        loadOverlayControls();
+    }, [isOpen]);
+
+    useEffect(() => {
         if (window.electronAPI?.onUndetectableChanged) {
             const unsubscribe = window.electronAPI.onUndetectableChanged((newState: boolean) => {
                 setIsUndetectable(newState);
@@ -303,7 +340,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
 
     useEffect(() => {
         if (window.electronAPI?.onDisguiseChanged) {
-            const unsubscribe = window.electronAPI.onDisguiseChanged((newMode: any) => {
+            const unsubscribe = window.electronAPI.onDisguiseChanged((newMode: 'terminal' | 'settings' | 'activity' | 'none') => {
                 setDisguiseMode(newMode);
             });
             return () => unsubscribe();
@@ -334,6 +371,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         return stored !== 'false';
     });
     const [overlayOpacity, setOverlayOpacity] = useUiOpacitySetting(OVERLAY_OPACITY_KEY, DEFAULT_OVERLAY_OPACITY);
+    const [overlayFontSize, setOverlayFontSize] = useOverlayFontSizeSetting(OVERLAY_FONT_SIZE_KEY, DEFAULT_OVERLAY_FONT_SIZE);
+    const [overlayWindowSettings, setOverlayWindowSettings] = useState<OverlayWindowSettings | null>(null);
+    const [overlayMonitors, setOverlayMonitors] = useState<OverlayMonitorInfo[]>([]);
+    const [selectedOverlayMonitorId, setSelectedOverlayMonitorId] = useState<string>('auto');
+    const [strictPassiveMode, setStrictPassiveMode] = useState(false);
+    const [overlayControlsSaving, setOverlayControlsSaving] = useState(false);
 
     // Recognition Language
     const [recognitionLanguage, setRecognitionLanguage] = useState('');
@@ -931,7 +974,62 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         }
     }, [isOpen, activeTab, selectedInput]);
 
+    const applyOverlaySettingsState = (settings: OverlayWindowSettings) => {
+        setOverlayWindowSettings(settings);
+        setSelectedOverlayMonitorId(settings.preferredMonitorId ?? 'auto');
+        setStrictPassiveMode(settings.strictPassiveMode);
+    };
+
+    const runOverlaySettingsUpdate = async (
+        updatePromise: Promise<OverlayWindowSettings>,
+        refreshMonitors: boolean = false
+    ) => {
+        if (overlayControlsSaving) return;
+        setOverlayControlsSaving(true);
+        try {
+            const settings = await updatePromise;
+            applyOverlaySettingsState(settings);
+            if (refreshMonitors) {
+                const monitors = await window.electronAPI.listOverlayMonitors();
+                setOverlayMonitors(monitors);
+            }
+        } catch (error) {
+            console.error('[SettingsOverlay] Failed to update overlay settings:', error);
+        } finally {
+            setOverlayControlsSaving(false);
+        }
+    };
+
+    const handleOverlayMonitorChange = async (monitorId: string) => {
+        const normalizedMonitorId = monitorId === 'auto' ? null : monitorId;
+        await runOverlaySettingsUpdate(
+            window.electronAPI.setOverlayMonitor({ monitorId: normalizedMonitorId }),
+            true
+        );
+    };
+
+    const handleOverlayStrictPassiveToggle = async () => {
+        const next = !strictPassiveMode;
+        await runOverlaySettingsUpdate(
+            window.electronAPI.setOverlayStrictPassiveMode({ enabled: next })
+        );
+    };
+
+    const handleApplyOverlayPreset = async (preset: OverlaySizePreset) => {
+        if (!overlayWindowSettings) return;
+        const nextWidth = Math.round(overlayWindowSettings.maxWidth * preset.widthRatio);
+        const nextHeight = Math.round(overlayWindowSettings.maxHeight * preset.heightRatio);
+        await runOverlaySettingsUpdate(
+            window.electronAPI.setOverlayManualSize({ width: nextWidth, height: nextHeight })
+        );
+    };
+
+    const handleResetOverlaySize = async () => {
+        await runOverlaySettingsUpdate(window.electronAPI.resetOverlayManualSize());
+    };
+
     const overlayOpacityPercent = opacityToPercent(overlayOpacity);
+    const overlayFontSizePx = overlayFontSize;
 
     return (
         <AnimatePresence>
@@ -1124,15 +1222,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                     </div>
                                                 </div>
 
-                                                {/* Overlay + Toolbar Opacity */}
+                                                {/* Overlay Opacity */}
                                                 <div className="flex items-center justify-between gap-6">
                                                     <div className="flex items-center gap-4 min-w-0">
                                                         <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
                                                             <Layout size={20} />
                                                         </div>
                                                         <div className="min-w-0">
-                                                            <h3 className="text-sm font-bold text-text-primary">Overlay + Toolbar Transparency</h3>
-                                                            <p className="text-xs text-text-secondary mt-0.5">One slider controls both surfaces for a consistent glass effect</p>
+                                                            <h3 className="text-sm font-bold text-text-primary">Overlay Transparency</h3>
+                                                            <p className="text-xs text-text-secondary mt-0.5">Adjust overlay glass intensity for readability.</p>
                                                         </div>
                                                     </div>
                                                     <div className="w-[220px] max-w-[45%]">
@@ -1148,8 +1246,113 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                             value={overlayOpacityPercent}
                                                             onChange={(e) => setOverlayOpacity(percentToOpacity(Number(e.target.value)))}
                                                             className="w-full h-2 accent-[var(--accent-primary)] bg-bg-input rounded-lg appearance-auto cursor-pointer"
-                                                            aria-label="Overlay and toolbar opacity"
+                                                            aria-label="Overlay opacity"
                                                         />
+                                                    </div>
+                                                </div>
+
+                                                {/* Overlay Font Size */}
+                                                <div className="flex items-center justify-between gap-6">
+                                                    <div className="flex items-center gap-4 min-w-0">
+                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
+                                                            <Type size={20} />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <h3 className="text-sm font-bold text-text-primary">Overlay Font Size</h3>
+                                                            <p className="text-xs text-text-secondary mt-0.5">Increase text size for stronger readability on transparent backgrounds.</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="w-[220px] max-w-[45%]">
+                                                        <div className="flex items-center justify-between mb-1.5 text-xs">
+                                                            <span className="text-text-tertiary">Smaller</span>
+                                                            <span className="text-text-primary font-medium">{overlayFontSizePx}px</span>
+                                                        </div>
+                                                        <input
+                                                            type="range"
+                                                            min={12}
+                                                            max={20}
+                                                            step={1}
+                                                            value={overlayFontSizePx}
+                                                            onChange={(e) => setOverlayFontSize(Number(e.target.value))}
+                                                            className="w-full h-2 accent-[var(--accent-primary)] bg-bg-input rounded-lg appearance-auto cursor-pointer"
+                                                            aria-label="Overlay font size"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="rounded-xl border border-border-subtle bg-bg-item-surface p-4 space-y-3">
+                                                    <div className="flex items-start gap-4">
+                                                        <div className="w-10 h-10 bg-bg-component rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
+                                                            <Crop size={20} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-sm font-bold text-text-primary">Overlay Size + Placement</h3>
+                                                            <p className="text-xs text-text-secondary mt-0.5">
+                                                                Choose the monitor, toggle passive interaction mode, and apply a quick size preset.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-center">
+                                                        <label htmlFor="overlay-monitor-select" className="text-xs font-medium text-text-secondary">
+                                                            Overlay monitor
+                                                        </label>
+                                                        <select
+                                                            id="overlay-monitor-select"
+                                                            value={selectedOverlayMonitorId}
+                                                            onChange={(e) => handleOverlayMonitorChange(e.target.value)}
+                                                            disabled={overlayControlsSaving}
+                                                            className="bg-bg-component border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary"
+                                                        >
+                                                            <option value="auto">Auto (current or primary monitor)</option>
+                                                            {overlayMonitors.map((monitor) => (
+                                                                <option key={monitor.id} value={monitor.id}>
+                                                                    {monitor.name}{monitor.isPrimary ? ' (Primary)' : ''}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <h4 className="text-xs font-semibold text-text-primary">Strict passive mode</h4>
+                                                            <p className="text-xs text-text-secondary mt-0.5">
+                                                                Ignore mouse events while overlay is visible. Use {shortcuts.toggleVisibility.join(' + ')} to hide/show overlay, or {shortcuts.endSession.join(' + ')} to end the session.
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            onClick={handleOverlayStrictPassiveToggle}
+                                                            disabled={overlayControlsSaving}
+                                                            className={`w-11 h-6 rounded-full relative transition-colors ${strictPassiveMode ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'} ${overlayControlsSaving ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                                                        >
+                                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${strictPassiveMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <span className="text-xs text-text-secondary">
+                                                            Current size: {overlayWindowSettings ? `${overlayWindowSettings.width} x ${overlayWindowSettings.height}` : 'Loading...'}
+                                                        </span>
+                                                        <button
+                                                            onClick={handleResetOverlaySize}
+                                                            disabled={overlayControlsSaving}
+                                                            className="px-3 py-1.5 rounded-md text-xs font-medium bg-bg-component hover:bg-bg-input text-text-primary border border-border-subtle disabled:opacity-60 disabled:cursor-not-allowed"
+                                                        >
+                                                            Reset Size
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {OVERLAY_SIZE_PRESETS.map((preset) => (
+                                                            <button
+                                                                key={preset.id}
+                                                                onClick={() => handleApplyOverlayPreset(preset)}
+                                                                disabled={overlayControlsSaving || !overlayWindowSettings}
+                                                                className="px-3 py-1.5 rounded-md text-xs font-medium bg-bg-component hover:bg-bg-input text-text-primary border border-border-subtle disabled:opacity-60 disabled:cursor-not-allowed"
+                                                            >
+                                                                {preset.label}
+                                                            </button>
+                                                        ))}
                                                     </div>
                                                 </div>
 
@@ -1890,6 +2093,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                     <KeyRecorder
                                                         currentKeys={shortcuts.toggleVisibility}
                                                         onSave={(keys) => updateShortcut('toggleVisibility', keys)}
+                                                    />
+                                                </div>
+                                                <div className="flex items-center justify-between py-1.5 group">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><LogOut size={14} /></span>
+                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">End Session</span>
+                                                    </div>
+                                                    <KeyRecorder
+                                                        currentKeys={shortcuts.endSession}
+                                                        onSave={(keys) => updateShortcut('endSession', keys)}
                                                     />
                                                 </div>
                                                 <div className="flex items-center justify-between py-1.5 group">
