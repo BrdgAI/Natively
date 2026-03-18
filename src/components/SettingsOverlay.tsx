@@ -14,6 +14,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { KeyRecorder } from './ui/KeyRecorder';
 import { ProfileVisualizer, PremiumUpgradeModal } from '../premium';
+import { useUiOpacitySetting } from '../hooks/useUiOpacitySetting';
+import {
+    DEFAULT_OVERLAY_OPACITY,
+    opacityToPercent,
+    percentToOpacity,
+    OVERLAY_OPACITY_KEY
+} from '../lib/uiTransparency';
 
 interface CustomSelectProps {
     label: string;
@@ -326,6 +333,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         const stored = localStorage.getItem('natively_interviewer_transcript');
         return stored !== 'false';
     });
+    const [overlayOpacity, setOverlayOpacity] = useUiOpacitySetting(OVERLAY_OPACITY_KEY, DEFAULT_OVERLAY_OPACITY);
 
     // Recognition Language
     const [recognitionLanguage, setRecognitionLanguage] = useState('');
@@ -923,6 +931,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         }
     }, [isOpen, activeTab, selectedInput]);
 
+    const overlayOpacityPercent = opacityToPercent(overlayOpacity);
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -1111,6 +1121,35 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                         className={`w-11 h-6 rounded-full relative cursor-pointer transition-colors ${showTranscript ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
                                                     >
                                                         <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${showTranscript ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                    </div>
+                                                </div>
+
+                                                {/* Overlay + Toolbar Opacity */}
+                                                <div className="flex items-center justify-between gap-6">
+                                                    <div className="flex items-center gap-4 min-w-0">
+                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
+                                                            <Layout size={20} />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <h3 className="text-sm font-bold text-text-primary">Overlay + Toolbar Transparency</h3>
+                                                            <p className="text-xs text-text-secondary mt-0.5">One slider controls both surfaces for a consistent glass effect</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="w-[220px] max-w-[45%]">
+                                                        <div className="flex items-center justify-between mb-1.5 text-xs">
+                                                            <span className="text-text-tertiary">More transparent</span>
+                                                            <span className="text-text-primary font-medium">{overlayOpacityPercent}%</span>
+                                                        </div>
+                                                        <input
+                                                            type="range"
+                                                            min={35}
+                                                            max={100}
+                                                            step={1}
+                                                            value={overlayOpacityPercent}
+                                                            onChange={(e) => setOverlayOpacity(percentToOpacity(Number(e.target.value)))}
+                                                            className="w-full h-2 accent-[var(--accent-primary)] bg-bg-input rounded-lg appearance-auto cursor-pointer"
+                                                            aria-label="Overlay and toolbar opacity"
+                                                        />
                                                     </div>
                                                 </div>
 

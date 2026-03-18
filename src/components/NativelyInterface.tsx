@@ -40,6 +40,11 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { analytics, detectProviderType } from '../lib/analytics/analytics.service';
 import { useShortcuts } from '../hooks/useShortcuts';
+import { useUiOpacitySetting } from '../hooks/useUiOpacitySetting';
+import {
+    DEFAULT_OVERLAY_OPACITY,
+    OVERLAY_OPACITY_KEY,
+} from '../lib/uiTransparency';
 
 interface Message {
     id: string;
@@ -73,6 +78,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting }) =
         const stored = localStorage.getItem('natively_interviewer_transcript');
         return stored !== 'false';
     });
+    const [overlayOpacity] = useUiOpacitySetting(OVERLAY_OPACITY_KEY, DEFAULT_OVERLAY_OPACITY);
 
     // Analytics State
     const requestStartTimeRef = useRef<number | null>(null);
@@ -1497,10 +1503,10 @@ Provide only the answer, nothing else.`;
                             expanded={isExpanded}
                             onToggle={() => setIsExpanded(!isExpanded)}
                             onQuit={() => onEndMeeting ? onEndMeeting() : window.electronAPI.quitApp()}
+                            backgroundOpacity={overlayOpacity}
                         />
                         <div className="
                     relative w-[600px] max-w-full
-                    bg-[#1E1E1E]/95
                     backdrop-blur-2xl
                     border border-white/10
                     shadow-2xl shadow-black/40
@@ -1509,6 +1515,10 @@ Provide only the answer, nothing else.`;
                     flex flex-col
                     draggable-area
                 ">
+                            <div
+                                className="absolute inset-0 pointer-events-none"
+                                style={{ backgroundColor: `rgba(30, 30, 30, ${overlayOpacity})` }}
+                            />
 
 
 
@@ -1681,25 +1691,26 @@ Provide only the answer, nothing else.`;
 
                                         className="
                                     w-full 
-                                    bg-[#1E1E1E] 
-                                    hover:bg-[#252525] 
-                                    focus:bg-[#1E1E1E]
-                                    border border-white/5 
-                                    focus:border-white/10
-                                    focus:ring-1 focus:ring-white/10
+                                    bg-white/10
+                                    hover:bg-white/12
+                                    focus:bg-white/14
+                                    backdrop-blur-xl
+                                    border border-white/20
+                                    focus:border-white/30
+                                    focus:ring-1 focus:ring-white/25
                                     rounded-xl 
                                     pl-3 pr-10 py-2.5 
-                                    text-slate-200 
+                                    text-white
                                     focus:outline-none 
                                     transition-all duration-200 ease-sculpted
                                     text-[13px] leading-relaxed
-                                    placeholder:text-slate-500
+                                    placeholder:text-slate-300/80
                                 "
                                     />
 
                                     {/* Custom Rich Placeholder */}
                                     {!inputValue && (
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] text-slate-400">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] text-slate-200/85">
                                             <span>Ask anything on screen or conversation, or</span>
                                             <div className="flex items-center gap-1 opacity-80">
                                                 {(shortcuts.selectiveScreenshot || ['⌘', 'Shift', 'H']).map((key, i) => (

@@ -3,6 +3,8 @@ import { useStreamBuffer } from '../hooks/useStreamBuffer';
 import { X, Copy, Check, Globe, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import nativelyIcon from './icon.png';
+import { useUiOpacitySetting } from '../hooks/useUiOpacitySetting';
+import { DEFAULT_OVERLAY_OPACITY, OVERLAY_OPACITY_KEY } from '../lib/uiTransparency';
 
 // ============================================
 // Types
@@ -120,6 +122,7 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
     const [chatState, setChatState] = useState<ChatState>('idle');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [query, setQuery] = useState('');
+    const [overlayOpacity] = useUiOpacitySetting(OVERLAY_OPACITY_KEY, DEFAULT_OVERLAY_OPACITY);
     const streamBuffer = useStreamBuffer();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -334,10 +337,15 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                             height: { type: "spring", stiffness: 300, damping: 30, mass: 0.8 },
                             opacity: { duration: 0.2 }
                         }}
-                        className="relative mx-auto w-full max-w-[680px] mb-0 bg-bg-secondary dark:bg-[#0C0C0C] rounded-t-[24px] border-t border-x border-border-subtle shadow-2xl overflow-hidden flex flex-col"
+                        className="relative mx-auto w-full max-w-[680px] mb-0 rounded-t-[24px] border-t border-x border-border-subtle shadow-2xl overflow-hidden flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
+                        <div
+                            className="absolute inset-0 pointer-events-none bg-bg-secondary dark:bg-[#0C0C0C]"
+                            style={{ opacity: overlayOpacity }}
+                        />
+
+                        <div className="relative z-10 flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
                             <div className="flex items-center gap-2 text-text-tertiary">
                                 <img src={nativelyIcon} className="w-3.5 h-3.5 force-black-icon brightness-0 dark:brightness-100 dark:opacity-50 dark:grayscale" alt="logo" />
                                 <span className="text-[13px] font-medium">Search all meetings</span>
@@ -351,7 +359,7 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                         </div>
 
                         {/* Messages area - scrollable */}
-                        <div className="flex-1 overflow-y-auto px-6 py-4 pb-32 custom-scrollbar">
+                        <div className="relative z-10 flex-1 overflow-y-auto px-6 py-4 pb-32 custom-scrollbar">
                             {messages.map((msg) => (
                                 msg.role === 'user'
                                     ? <UserMessage key={msg.id} content={msg.content} />
@@ -383,7 +391,7 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                                     onChange={(e) => setQuery(e.target.value)}
                                     onKeyDown={handleInputKeyDown}
                                     placeholder="Ask me anything..."
-                                    className="w-full pl-5 pr-12 py-3 bg-bg-elevated shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-border-muted dark:bg-bg-elevated/20 dark:backdrop-blur-xl dark:border-border-subtle rounded-full text-sm text-text-primary placeholder-text-tertiary/70 focus:outline-none transition-all"
+                                    className="w-full pl-5 pr-12 py-3 bg-white/85 dark:bg-white/14 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.16)] border border-black/10 dark:border-white/25 rounded-full text-sm text-black dark:text-white placeholder:text-black/55 dark:placeholder:text-white/65 focus:outline-none focus:ring-2 focus:ring-white/35 transition-all"
                                 />
                                 <button
                                     onClick={() => {

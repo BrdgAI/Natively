@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { MessageSquare, Link, Camera, Zap, Heart, User } from 'lucide-react';
 import { useShortcuts } from '../hooks/useShortcuts';
+import { useUiOpacitySetting } from '../hooks/useUiOpacitySetting';
+import {
+    DEFAULT_OVERLAY_OPACITY,
+    opacityToPercent,
+    percentToOpacity,
+    OVERLAY_OPACITY_KEY
+} from '../lib/uiTransparency';
 
 const SettingsPopup = () => {
     const { shortcuts } = useShortcuts();
@@ -11,6 +18,8 @@ const SettingsPopup = () => {
     const [profileMode, setProfileMode] = useState(false);
     const [hasProfile, setHasProfile] = useState(false);
     const [isPremium, setIsPremium] = useState(false);
+    const [overlayOpacity, setOverlayOpacity] = useUiOpacitySetting(OVERLAY_OPACITY_KEY, DEFAULT_OVERLAY_OPACITY);
+    const overlayPercent = opacityToPercent(overlayOpacity);
 
     const isFirstRender = React.useRef(true);
 
@@ -227,6 +236,24 @@ const SettingsPopup = () => {
                     >
                         <div className={`w-[15px] h-[15px] rounded-full bg-black shadow-sm transition-transform duration-300 ease-spring ${showTranscript ? 'translate-x-[12px]' : 'translate-x-0'}`} />
                     </button>
+                </div>
+
+                {/* Overlay + Toolbar Transparency */}
+                <div className="px-3 py-2 hover:bg-white/5 rounded-lg transition-colors duration-200 group">
+                    <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[12px] font-medium text-slate-300">Overlay + toolbar</span>
+                        <span className="text-[11px] text-slate-400">{overlayPercent}%</span>
+                    </div>
+                    <input
+                        type="range"
+                        min={35}
+                        max={100}
+                        step={1}
+                        value={overlayPercent}
+                        onChange={(e) => setOverlayOpacity(percentToOpacity(Number(e.target.value)))}
+                        className="w-full h-1.5 accent-blue-500 bg-white/10 rounded-lg appearance-auto cursor-pointer"
+                        aria-label="Overlay and toolbar opacity"
+                    />
                 </div>
 
                 {/* Profile Mode Toggle */}

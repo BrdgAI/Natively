@@ -5,12 +5,14 @@ interface TopPillProps {
     expanded: boolean;
     onToggle: () => void;
     onQuit: () => void;
+    backgroundOpacity?: number;
 }
 
 export default function TopPill({
     expanded,
     onToggle,
     onQuit,
+    backgroundOpacity = 0.8,
 }: TopPillProps) {
     return (
         <div className="flex justify-center mt-2 select-none z-50">
@@ -19,14 +21,14 @@ export default function TopPill({
           draggable-area
           flex items-center gap-2
           rounded-full
-          bg-[#1E1E1E]/80
           backdrop-blur-md
           border border-white/10
           shadow-lg shadow-black/20
           pl-1.5 pr-1.5 py-1.5
           transition-all duration-300 ease-sculpted
-          hover:bg-[#1E1E1E]/90 hover:border-white/15 hover:shadow-xl
+          hover:brightness-110 hover:border-white/15 hover:shadow-xl
         "
+                style={{ backgroundColor: `rgba(30, 30, 30, ${backgroundOpacity})` }}
             >
                 {/* LOGO BUTTON */}
                 <button

@@ -11,6 +11,8 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useUiOpacitySetting } from '../hooks/useUiOpacitySetting';
+import { DEFAULT_OVERLAY_OPACITY, OVERLAY_OPACITY_KEY } from '../lib/uiTransparency';
 
 // ============================================
 // Types 
@@ -192,6 +194,7 @@ const MeetingChatOverlay: React.FC<MeetingChatOverlayProps> = ({
     const [messages, setMessages] = useState<Message[]>([]);
     const [chatState, setChatState] = useState<ChatState>('idle');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [overlayOpacity] = useUiOpacitySetting(OVERLAY_OPACITY_KEY, DEFAULT_OVERLAY_OPACITY);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -501,11 +504,16 @@ ${contextString}`;
                             height: { type: "spring", stiffness: 300, damping: 30, mass: 0.8 },
                             opacity: { duration: 0.2 }
                         }}
-                        className="relative mx-auto w-full max-w-[680px] mb-0 bg-bg-secondary dark:bg-[#0C0C0C] rounded-t-[24px] border-t border-x border-border-subtle shadow-2xl overflow-hidden flex flex-col"
+                        className="relative mx-auto w-full max-w-[680px] mb-0 rounded-t-[24px] border-t border-x border-border-subtle shadow-2xl overflow-hidden flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
+                        <div
+                            className="absolute inset-0 pointer-events-none bg-bg-secondary dark:bg-[#0C0C0C]"
+                            style={{ opacity: overlayOpacity }}
+                        />
+
                         {/* Header with close button */}
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
+                        <div className="relative z-10 flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
                             <div className="flex items-center gap-2 text-text-tertiary">
                                 <img src={nativelyIcon} className="w-3.5 h-3.5 brightness-0 dark:brightness-100 dark:opacity-50 dark:grayscale" alt="logo" />
                                 <span className="text-[13px] font-medium">Search this meeting</span>
@@ -519,7 +527,7 @@ ${contextString}`;
                         </div>
 
                         {/* Messages area - scrollable */}
-                        <div className="flex-1 overflow-y-auto px-6 py-4 pb-32 custom-scrollbar">
+                        <div className="relative z-10 flex-1 overflow-y-auto px-6 py-4 pb-32 custom-scrollbar">
                             {messages.map((msg) => (
                                 msg.role === 'user'
                                     ? <UserMessage key={msg.id} content={msg.content} />
