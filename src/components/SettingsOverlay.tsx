@@ -691,12 +691,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [calendarStatus, setCalendarStatus] = useState<{ connected: boolean; email?: string }>({ connected: false });
     const [isCalendarsLoading, setIsCalendarsLoading] = useState(false);
 
-    const audioContextRef = React.useRef<AudioContext | null>(null);
-    const analyserRef = React.useRef<AnalyserNode | null>(null);
-    const sourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null);
-    const rafRef = React.useRef<number | null>(null);
-    const streamRef = React.useRef<MediaStream | null>(null);
-
     // Load stored credentials on mount
 
 
@@ -784,12 +778,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                         setSelectedInput(savedInput);
                     } else if (inputs.length > 0 && !selectedInput) {
                         setSelectedInput(inputs[0].id);
+                        localStorage.setItem('preferredInputDeviceId', inputs[0].id);
                     }
 
                     if (savedOutput && outputs.find((d: any) => d.id === savedOutput)) {
                         setSelectedOutput(savedOutput);
                     } else if (outputs.length > 0 && !selectedOutput) {
                         setSelectedOutput(outputs[0].id);
+                        localStorage.setItem('preferredOutputDeviceId', outputs[0].id);
                     }
                 } catch (e) {
                     console.error("Error loading native devices:", e);
@@ -808,112 +804,30 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         }
     }, [isOpen, selectedInput, selectedOutput]); // Re-run if isOpen changes, or if selected devices are cleared
 
-    // Effect for real-time audio level monitoring
+    // Use the native mic test path so device IDs stay consistent with the meeting runtime.
     useEffect(() => {
         if (isOpen && activeTab === 'audio') {
-            let mounted = true;
+            const unsubscribe = window.electronAPI?.onAudioTestLevel?.((level) => {
+                setMicLevel(Math.max(0, Math.min(100, level * 100)));
+            });
 
-            const startAudio = async () => {
-                try {
-                    // Cleanup previous audio context if it exists
-                    if (audioContextRef.current) {
-                        audioContextRef.current.close();
-                    }
-
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            deviceId: selectedInput ? { exact: selectedInput } : undefined
-                        }
-                    });
-
-                    streamRef.current = stream;
-
-                    if (!mounted) return;
-
-                    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-                    const analyser = audioContext.createAnalyser();
-                    const source = audioContext.createMediaStreamSource(stream);
-
-                    analyser.fftSize = 256;
-                    source.connect(analyser);
-
-                    audioContextRef.current = audioContext;
-                    analyserRef.current = analyser;
-                    sourceRef.current = source;
-
-                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                    let smoothLevel = 0;
-
-                    const updateLevel = () => {
-                        if (!mounted || !analyserRef.current) return;
-                        // Use Time Domain Data for accurate volume (waveform) instead of frequency
-                        analyserRef.current.getByteTimeDomainData(dataArray);
-
-                        let sum = 0;
-                        for (let i = 0; i < dataArray.length; i++) {
-                            // Convert 0-255 to -1 to 1 range
-                            const value = (dataArray[i] - 128) / 128;
-                            sum += value * value;
-                        }
-
-                        // Calculate RMS
-                        const rms = Math.sqrt(sum / dataArray.length);
-
-                        // Convert to simpler 0-100 range with some boost
-                        // RMS is usually very small (0.01 - 0.5 for normal speech)
-                        // Logarithmic scaling feels more natural for volume
-                        const db = 20 * Math.log10(rms);
-                        // Approximate mapping: -60dB (silence) to 0dB (max) -> 0 to 100
-                        const targetLevel = Math.max(0, Math.min(100, (db + 60) * 2));
-
-                        // Apply smoothing
-                        if (targetLevel > smoothLevel) {
-                            smoothLevel = smoothLevel * 0.7 + targetLevel * 0.3; // Fast attack
-                        } else {
-                            smoothLevel = smoothLevel * 0.95 + targetLevel * 0.05; // Slow decay
-                        }
-
-                        setMicLevel(smoothLevel);
-
-                        rafRef.current = requestAnimationFrame(updateLevel);
-                    };
-
-                    updateLevel();
-                } catch (error) {
-                    console.error("Error accessing microphone:", error);
-                    setMicLevel(0); // Reset level on error
-                }
-            };
-
-            startAudio();
+            window.electronAPI?.startAudioTest(selectedInput || undefined).catch((error) => {
+                console.error("Error starting native microphone test:", error);
+                setMicLevel(0);
+            });
 
             return () => {
-                mounted = false;
-                if (rafRef.current) cancelAnimationFrame(rafRef.current);
-                if (sourceRef.current) sourceRef.current.disconnect();
-                if (audioContextRef.current) {
-                    audioContextRef.current.close();
-                    audioContextRef.current = null;
-                }
-                if (streamRef.current) {
-                    streamRef.current.getTracks().forEach(track => track.stop());
-                    streamRef.current = null;
-                }
-                setMicLevel(0); // Reset mic level on cleanup
+                unsubscribe?.();
+                window.electronAPI?.stopAudioTest?.().catch((error) => {
+                    console.error("Error stopping native microphone test:", error);
+                });
+                setMicLevel(0);
             };
         } else {
-            // Cleanup when closing tab or overlay or switching away from audio tab
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
-            if (sourceRef.current) sourceRef.current.disconnect(); // Disconnect source as well
-            if (audioContextRef.current) {
-                audioContextRef.current.close();
-                audioContextRef.current = null;
-            }
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(track => track.stop());
-                streamRef.current = null;
-            }
             setMicLevel(0);
+            window.electronAPI?.stopAudioTest?.().catch((error) => {
+                console.error("Error stopping native microphone test:", error);
+            });
         }
     }, [isOpen, activeTab, selectedInput]);
 
@@ -2306,15 +2220,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                             oscillator.frequency.setValueAtTime(523.25, ctx.currentTime);
                                                             gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
                                                             gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.0);
-
-                                                            if (selectedOutput && (ctx as any).setSinkId) {
-                                                                try {
-                                                                    await (ctx as any).setSinkId(selectedOutput);
-                                                                } catch (e) {
-                                                                    console.warn("Error setting sink for AudioContext", e);
-                                                                }
-                                                            }
-
                                                             oscillator.start();
                                                             oscillator.stop(ctx.currentTime + 1.0);
                                                         } catch (e) {
@@ -2323,8 +2228,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                     }}
                                                     className="text-xs bg-bg-input hover:bg-bg-elevated text-text-primary px-3 py-1.5 rounded-md transition-colors flex items-center gap-2"
                                                 >
-                                                    <Speaker size={12} /> Test Sound
+                                                    <Speaker size={12} /> Test System Output
                                                 </button>
+                                            </div>
+
+                                            <div className="flex gap-2 items-center px-1">
+                                                <Info size={14} className="text-text-secondary shrink-0" />
+                                                <p className="text-xs text-text-secondary">
+                                                    This preview tone plays through your current macOS system output. The selected output device above is used only by the legacy CoreAudio beta path; the default engine captures the current system mix with ScreenCaptureKit.
+                                                </p>
                                             </div>
 
                                             <div className="h-px bg-border-subtle my-2" />

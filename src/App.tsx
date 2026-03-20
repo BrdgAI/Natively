@@ -156,18 +156,17 @@ const App: React.FC = () => {
   const handleStartMeeting = async () => {
     try {
       localStorage.setItem('natively_last_meeting_start', Date.now().toString());
-      const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
-      let outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
+      const inputDeviceId = localStorage.getItem('preferredInputDeviceId') || undefined;
       const useLegacyAudio = localStorage.getItem('useLegacyAudioBackend') === 'true';
+      const outputDeviceId = useLegacyAudio
+        ? (localStorage.getItem('preferredOutputDeviceId') || undefined)
+        : 'sck';
 
-      // Override output device ID to force SCK if experimental mode is enabled
-      // Default to SCK unless legacy is enabled
-      if (!useLegacyAudio) {
-        console.log("[App] Using ScreenCaptureKit backend (Default).");
-        outputDeviceId = "sck";
-      } else {
-        console.log("[App] Using Legacy CoreAudio backend (User Preference).");
-      }
+      console.log(
+        `[App] Starting meeting with ${
+          useLegacyAudio ? 'CoreAudio-preferred' : 'ScreenCaptureKit'
+        } macOS output backend selection.`
+      );
 
       const result = await window.electronAPI.startMeeting({
         audio: { inputDeviceId, outputDeviceId }
