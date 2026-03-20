@@ -1,0 +1,2 @@
+package.json merge=ours
+electron/tsconfig.json merge=ours
