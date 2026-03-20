@@ -862,16 +862,15 @@ export class AppState {
     console.log(`[Main] Starting Audio Test on device: ${deviceId || 'default'}`);
     this.stopAudioTest(); // Stop any existing test
 
-    try {
-      this.audioTestCapture = new MicrophoneCapture(deviceId || undefined);
-      this.audioTestCapture.start();
+    const attachAudioTestListeners = (capture: MicrophoneCapture) => {
+      capture.on('data', (chunk: Buffer) => {
+        const targets = [
+          this.settingsWindowHelper.getSettingsWindow(),
+          this.getWindowHelper().getLauncherWindow(),
+          this.getWindowHelper().getOverlayWindow(),
+        ].filter((win): win is BrowserWindow => !!win && !win.isDestroyed());
 
-      // Send to settings window if open, else main window
-      const win = this.settingsWindowHelper.getSettingsWindow() || this.getMainWindow();
-
-      this.audioTestCapture.on('data', (chunk: Buffer) => {
-        // Calculate basic RMS for level meter
-        if (!win || win.isDestroyed()) return;
+        if (targets.length === 0) return;
 
         let sum = 0;
         const step = 10;
@@ -885,18 +884,31 @@ export class AppState {
         const count = len / (2 * step);
         if (count > 0) {
           const rms = Math.sqrt(sum / count);
-          // Normalize 0-1 (heuristic scaling, max comfortable mic input is around 10000-20000)
           const level = Math.min(rms / 10000, 1.0);
-          win.webContents.send('audio-level', level);
+          for (const target of targets) {
+            target.webContents.send('audio-test-level', level);
+          }
         }
       });
 
-      this.audioTestCapture.on('error', (err: Error) => {
+      capture.on('error', (err: Error) => {
         console.error('[Main] AudioTest Error:', err);
       });
+    };
 
+    try {
+      this.audioTestCapture = new MicrophoneCapture(deviceId || undefined);
+      attachAudioTestListeners(this.audioTestCapture);
+      this.audioTestCapture.start();
     } catch (err) {
-      console.error('[Main] Failed to start audio test:', err);
+      console.warn('[Main] Failed to start audio test on preferred device. Falling back to default.', err);
+      try {
+        this.audioTestCapture = new MicrophoneCapture();
+        attachAudioTestListeners(this.audioTestCapture);
+        this.audioTestCapture.start();
+      } catch (fallbackErr) {
+        console.error('[Main] Failed to start audio test:', fallbackErr);
+      }
     }
   }
 

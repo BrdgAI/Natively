@@ -3,22 +3,26 @@ import path from 'path';
 import { app } from 'electron';
 import { IEmbeddingProvider } from './IEmbeddingProvider';
 
+const dynamicImport = new Function(
+  'specifier',
+  'return import(specifier);'
+) as (specifier: string) => Promise<any>;
+
 export class LocalEmbeddingProvider implements IEmbeddingProvider {
   readonly name = 'local';
   readonly dimensions = 384; // all-MiniLM-L6-v2
 
   private pipe: any = null;
   private loadingPromise: Promise<void> | null = null; // prevents concurrent init races
-  private modelPath: string;
+  private modelRoot: string;
+  private readonly modelId = 'Xenova/all-MiniLM-L6-v2';
 
   constructor() {
-    // Point to the bundled model inside the app's resources.
-    // In dev: __dirname = dist-electron/electron/rag/providers → need 4 levels up to project root.
-    // In prod: app.isPackaged = true → use process.resourcesPath (electron-builder extraResources).
-    this.modelPath = path.join(
-      app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../../../resources'),
-      'models'
-    );
+    // transformers.js resolves local models as <localModelPath>/<modelId>/...
+    // so localModelPath must be the directory above "Xenova/".
+    this.modelRoot = app.isPackaged
+      ? path.join(process.resourcesPath, 'models')
+      : path.join(app.getAppPath(), 'resources/models');
   }
 
   async isAvailable(): Promise<boolean> {
@@ -43,18 +47,14 @@ export class LocalEmbeddingProvider implements IEmbeddingProvider {
     }
 
     this.loadingPromise = (async () => {
-      // Use new Function() to force a true ESM dynamic import at runtime.
-      // TypeScript with module:commonjs rewrites `await import(...)` to
-      // `Promise.resolve().then(() => require(...))`, which fails for ESM-only
-      // packages like @xenova/transformers. The new Function() trick is opaque
-      // to the TypeScript compiler so it is left as a real import() call.
-      const { pipeline, env } = await (new Function('return import("@xenova/transformers")')()) as typeof import('@xenova/transformers');
+      // Keep a real runtime import so CommonJS compilation does not lower this to require().
+      const { pipeline, env } = await dynamicImport('@xenova/transformers');
 
       // Tell transformers.js to use the local path, never download in production
       env.allowRemoteModels = false;
-      env.localModelPath = this.modelPath;
+      env.localModelPath = this.modelRoot;
 
-      this.pipe = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
+      this.pipe = await pipeline('feature-extraction', this.modelId, {
         local_files_only: true,
       });
     })();

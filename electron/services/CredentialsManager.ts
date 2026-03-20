@@ -95,6 +95,10 @@ export class CredentialsManager {
         return this.credentials.openaiApiKey;
     }
 
+    public getOpenAiApiKey(): string | undefined {
+        return this.getOpenaiApiKey();
+    }
+
     public getClaudeApiKey(): string | undefined {
         return this.credentials.claudeApiKey;
     }
@@ -194,6 +198,10 @@ export class CredentialsManager {
         this.credentials.openaiApiKey = key;
         this.saveCredentials();
         console.log('[CredentialsManager] OpenAI API Key updated');
+    }
+
+    public setOpenAiApiKey(key: string): void {
+        this.setOpenaiApiKey(key);
     }
 
     public setClaudeApiKey(key: string): void {
