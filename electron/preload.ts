@@ -152,7 +152,7 @@ interface ElectronAPI {
 
   // Database
   flushDatabase: () => Promise<{ success: boolean }>
-  showWindow: () => Promise<void>
+  showWindow: (inactive?: boolean) => Promise<void>
   hideWindow: () => Promise<void>
   showOverlay: () => Promise<void>
   hideOverlay: () => Promise<void>
@@ -214,9 +214,10 @@ interface ElectronAPI {
   onRAGStreamError: (callback: (data: { meetingId?: string; global?: boolean; error: string }) => void) => () => void
 
   // Keybind Management
-  getKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string }>>
+  getKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string; enabled: boolean; defaultEnabled: boolean }>>
   setKeybind: (id: string, accelerator: string) => Promise<boolean>
-  resetKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string }>>
+  setKeybindEnabled: (id: string, enabled: boolean) => Promise<boolean>
+  resetKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string; enabled: boolean; defaultEnabled: boolean }>>
   onKeybindsUpdate: (callback: (keybinds: Array<any>) => void) => () => void
 
   // Global shortcut events (stealth: fired even when window is not focused)
@@ -905,6 +906,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Keybind Management
   getKeybinds: () => ipcRenderer.invoke('keybinds:get-all'),
   setKeybind: (id: string, accelerator: string) => ipcRenderer.invoke('keybinds:set', id, accelerator),
+  setKeybindEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke('keybinds:set-enabled', id, enabled),
   resetKeybinds: () => ipcRenderer.invoke('keybinds:reset'),
   onKeybindsUpdate: (callback: (keybinds: Array<any>) => void) => {
     const subscription = (_: any, keybinds: any) => callback(keybinds)

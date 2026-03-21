@@ -5,9 +5,10 @@ interface KeyRecorderProps {
     currentKeys: string[];
     onSave: (keys: string[]) => void;
     className?: string;
+    disabled?: boolean;
 }
 
-export const KeyRecorder: React.FC<KeyRecorderProps> = ({ currentKeys, onSave, className }) => {
+export const KeyRecorder: React.FC<KeyRecorderProps> = ({ currentKeys, onSave, className, disabled = false }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
     const inputRef = useRef<HTMLDivElement>(null);
@@ -60,8 +61,12 @@ export const KeyRecorder: React.FC<KeyRecorderProps> = ({ currentKeys, onSave, c
 
     return (
         <div
-            className={`relative flex items-center gap-1.5 group ${className || ''}`}
-            onClick={() => setIsRecording(true)}
+            className={`relative flex items-center gap-1.5 group ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${className || ''}`}
+            onClick={() => {
+                if (disabled) return;
+                setIsRecording(true);
+            }}
+            aria-disabled={disabled}
         >
             {isRecording ? (
                 <div
@@ -83,7 +88,7 @@ export const KeyRecorder: React.FC<KeyRecorderProps> = ({ currentKeys, onSave, c
                         else if (k === 'ArrowRight') displayKey = '→';
 
                         return (
-                            <span key={i} className="bg-bg-input text-text-secondary h-6 min-w-[26px] px-1.5 rounded-md text-xs font-sans flex items-center justify-center shadow-sm border border-border-subtle group-hover:border-text-tertiary transition-colors">
+                            <span key={i} className={`bg-bg-input text-text-secondary h-6 min-w-[26px] px-1.5 rounded-md text-xs font-sans flex items-center justify-center shadow-sm border border-border-subtle transition-colors ${disabled ? '' : 'group-hover:border-text-tertiary'}`}>
                                 {displayKey}
                             </span>
                         );

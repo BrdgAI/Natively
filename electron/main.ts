@@ -1652,6 +1652,7 @@ export class AppState {
     if (!this.tray) return;
 
     const keybindManager = KeybindManager.getInstance();
+    const screenshotEnabled = keybindManager.isKeybindEnabled('general:take-screenshot');
     const screenshotAccel = keybindManager.getKeybind('general:take-screenshot') || 'CommandOrControl+H';
 
     console.log('[Main] updateTrayMenu called. Screenshot Accelerator:', screenshotAccel);
@@ -1669,11 +1670,12 @@ export class AppState {
         .replace(/\+/g, '+');
     };
 
-    const displayScreenshot = formatAccel(screenshotAccel);
+    const displayScreenshot = screenshotEnabled ? formatAccel(screenshotAccel) : '';
     // We can also get the toggle visibility shortcut if desired
+    const toggleEnabled = keybindManager.isKeybindEnabled('general:toggle-visibility');
     const toggleKb = keybindManager.getKeybind('general:toggle-visibility');
     const toggleAccel = toggleKb || 'CommandOrControl+B';
-    const displayToggle = formatAccel(toggleAccel);
+    const displayToggle = toggleEnabled ? formatAccel(toggleAccel) : '';
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -1683,7 +1685,7 @@ export class AppState {
         }
       },
       {
-        label: `Toggle Window (${displayToggle})`,
+        label: toggleEnabled ? `Toggle Window (${displayToggle})` : 'Toggle Window',
         click: () => {
           this.toggleMainWindow()
         }
@@ -1692,8 +1694,8 @@ export class AppState {
         type: 'separator'
       },
       {
-        label: `Take Screenshot (${displayScreenshot})`,
-        accelerator: screenshotAccel,
+        label: screenshotEnabled ? `Take Screenshot (${displayScreenshot})` : 'Take Screenshot',
+        accelerator: screenshotEnabled ? screenshotAccel : undefined,
         click: async () => {
           try {
             const screenshotPath = await this.takeScreenshot()

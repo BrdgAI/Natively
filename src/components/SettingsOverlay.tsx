@@ -12,7 +12,7 @@ import { analytics } from '../lib/analytics/analytics.service';
 import { AboutSection } from './AboutSection';
 import { AIProvidersSettings } from './settings/AIProvidersSettings';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useShortcuts } from '../hooks/useShortcuts';
+import { useShortcuts, type ShortcutActionId } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import {
     clampOverlayOpacity,
@@ -381,7 +381,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         }
     }, [isOpen, initialTab]);
     
-    const { shortcuts, updateShortcut, resetShortcuts } = useShortcuts();
+    const { shortcuts, shortcutEnabled, updateShortcut, setShortcutEnabled, resetShortcuts } = useShortcuts();
     const [isUndetectable, setIsUndetectable] = useState(false);
     const [disguiseMode, setDisguiseMode] = useState<'terminal' | 'settings' | 'activity' | 'none'>('none');
     const [openOnLogin, setOpenOnLogin] = useState(false);
@@ -1155,6 +1155,69 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             });
         }
     }, [isOpen, activeTab, selectedInput]);
+
+    const shortcutSections: Array<{ title: string; items: Array<{ id: ShortcutActionId; label: string; icon: React.ReactNode }> }> = [
+        {
+            title: 'General',
+            items: [
+                { id: 'toggleVisibility', label: 'Toggle Visibility', icon: <Eye size={14} /> },
+                { id: 'processScreenshots', label: 'Process Screenshots', icon: <MessageSquare size={14} /> },
+                { id: 'captureAndProcess', label: 'Capture Screen & Ask AI', icon: <Zap size={14} /> },
+                { id: 'resetCancel', label: 'Reset / Cancel', icon: <RotateCcw size={14} /> },
+                { id: 'takeScreenshot', label: 'Take Screenshot', icon: <Camera size={14} /> },
+                { id: 'selectiveScreenshot', label: 'Selective Screenshot', icon: <Crop size={14} /> }
+            ]
+        },
+        {
+            title: 'Chat',
+            items: [
+                { id: 'whatToAnswer', label: 'What to Answer', icon: <Sparkles size={14} /> },
+                { id: 'shorten', label: 'Shorten', icon: <Pencil size={14} /> },
+                { id: 'followUp', label: 'Follow Up', icon: <MessageSquare size={14} /> },
+                { id: 'recap', label: 'Get Recap', icon: <RefreshCw size={14} /> },
+                { id: 'answer', label: 'Answer / Record', icon: <Mic size={14} /> },
+                { id: 'scrollUp', label: 'Scroll Up', icon: <ArrowUp size={14} /> },
+                { id: 'scrollDown', label: 'Scroll Down', icon: <ArrowDown size={14} /> }
+            ]
+        },
+        {
+            title: 'Window',
+            items: [
+                { id: 'moveWindowUp', label: 'Move Window Up', icon: <ArrowUp size={14} /> },
+                { id: 'moveWindowDown', label: 'Move Window Down', icon: <ArrowDown size={14} /> },
+                { id: 'moveWindowLeft', label: 'Move Window Left', icon: <ArrowLeft size={14} /> },
+                { id: 'moveWindowRight', label: 'Move Window Right', icon: <ArrowRight size={14} /> }
+            ]
+        }
+    ];
+
+    const renderShortcutRow = (item: { id: ShortcutActionId; label: string; icon: React.ReactNode }) => {
+        const enabled = shortcutEnabled[item.id];
+
+        return (
+            <div key={item.id} className={`flex items-center gap-4 py-1.5 group transition-opacity ${enabled ? '' : 'opacity-55'}`}>
+                <button
+                    onClick={() => setShortcutEnabled(item.id, !enabled)}
+                    className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${enabled ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                    title={enabled ? 'Disable shortcut' : 'Enable shortcut'}
+                    aria-pressed={enabled}
+                >
+                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center shrink-0">{item.icon}</span>
+                    <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors truncate">{item.label}</span>
+                </div>
+                <div className="shrink-0">
+                    <KeyRecorder
+                        currentKeys={shortcuts[item.id]}
+                        onSave={(keys) => updateShortcut(item.id, keys)}
+                        disabled={!enabled}
+                    />
+                </div>
+            </div>
+        );
+    };
 
     return (
         <AnimatePresence>
@@ -2495,7 +2558,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                     <div className="flex items-start justify-between">
                                         <div>
                                             <h3 className="text-lg font-bold text-text-primary mb-1">Keyboard shortcuts</h3>
-                                            <p className="text-xs text-text-secondary">Natively works with these easy to remember commands.</p>
+                                            <p className="text-xs text-text-secondary">Turn off any shortcut you do not want while keeping its saved key combo for later.</p>
                                         </div>
                                         <button
                                             onClick={resetShortcuts}
@@ -2507,115 +2570,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                     </div>
 
                                     <div className="grid gap-6">
-                                        {/* General Category */}
-                                        <div>
-                                            <h4 className="text-sm font-bold text-text-primary mb-3">General</h4>
-                                            <div className="space-y-1">
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Eye size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Toggle Visibility</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.toggleVisibility}
-                                                        onSave={(keys) => updateShortcut('toggleVisibility', keys)}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><MessageSquare size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Process Screenshots</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.processScreenshots}
-                                                        onSave={(keys) => updateShortcut('processScreenshots', keys)}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><RotateCcw size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Reset / Cancel</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.resetCancel}
-                                                        onSave={(keys) => updateShortcut('resetCancel', keys)}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Camera size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Take Screenshot</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.takeScreenshot}
-                                                        onSave={(keys) => updateShortcut('takeScreenshot', keys)}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Crop size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Selective Screenshot</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.selectiveScreenshot}
-                                                        onSave={(keys) => updateShortcut('selectiveScreenshot', keys)}
-                                                    />
+                                        {shortcutSections.map((section) => (
+                                            <div key={section.title}>
+                                                <h4 className="text-sm font-bold text-text-primary mb-3">{section.title}</h4>
+                                                <div className="space-y-1">
+                                                    {section.items.map(renderShortcutRow)}
                                                 </div>
                                             </div>
-                                        </div>
-
-                                        {/* Chat Category */}
-                                        <div>
-                                            <div className="mb-3">
-                                                <h4 className="text-sm font-bold text-text-primary">Chat</h4>
-                                            </div>
-                                            <div className="space-y-1">
-                                                {[
-                                                    { id: 'whatToAnswer', label: 'What to Answer', icon: <Sparkles size={14} /> },
-                                                    { id: 'shorten', label: 'Shorten', icon: <Pencil size={14} /> },
-                                                    { id: 'followUp', label: 'Follow Up', icon: <MessageSquare size={14} /> },
-                                                    { id: 'recap', label: 'Get Recap', icon: <RefreshCw size={14} /> },
-                                                    { id: 'answer', label: 'Answer / Record', icon: <Mic size={14} /> },
-                                                    { id: 'scrollUp', label: 'Scroll Up', icon: <ArrowUp size={14} /> },
-                                                    { id: 'scrollDown', label: 'Scroll Down', icon: <ArrowDown size={14} /> },
-                                                ].map((item, i) => (
-                                                    <div key={i} className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center">{item.icon}</span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">{item.label}</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts[item.id as keyof typeof shortcuts]}
-                                                            onSave={(keys) => updateShortcut(item.id as any, keys)}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Window Category */}
-                                        <div>
-                                            <h4 className="text-sm font-bold text-text-primary mb-3">Window</h4>
-                                            <div className="space-y-1">
-                                                {[
-                                                    { id: 'moveWindowUp', label: 'Move Window Up', icon: <ArrowUp size={14} /> },
-                                                    { id: 'moveWindowDown', label: 'Move Window Down', icon: <ArrowDown size={14} /> },
-                                                    { id: 'moveWindowLeft', label: 'Move Window Left', icon: <ArrowLeft size={14} /> },
-                                                    { id: 'moveWindowRight', label: 'Move Window Right', icon: <ArrowRight size={14} /> }
-                                                ].map((item, i) => (
-                                                    <div key={i} className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center">{item.icon}</span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">{item.label}</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts[item.id as keyof typeof shortcuts]}
-                                                            onSave={(keys) => updateShortcut(item.id as any, keys)}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
+                                        ))}
                                     </div>
                                 </div>
                             )}
