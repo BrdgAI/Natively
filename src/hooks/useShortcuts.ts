@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { acceleratorToKeys, keysToAccelerator } from '../utils/keyboardUtils';
 
-// Define the shape of our shortcuts configuration
 export interface ShortcutConfig {
     whatToAnswer: string[];
     shorten: string[];
@@ -10,12 +9,10 @@ export interface ShortcutConfig {
     answer: string[];
     scrollUp: string[];
     scrollDown: string[];
-    // Window Movement
     moveWindowUp: string[];
     moveWindowDown: string[];
     moveWindowLeft: string[];
     moveWindowRight: string[];
-    // General
     toggleVisibility: string[];
     processScreenshots: string[];
     captureAndProcess: string[];
@@ -24,65 +21,103 @@ export interface ShortcutConfig {
     selectiveScreenshot: string[];
 }
 
+export type ShortcutActionId = keyof ShortcutConfig;
+export type ShortcutEnabledConfig = Record<ShortcutActionId, boolean>;
+
+type BackendKeybind = {
+    id: string;
+    label: string;
+    accelerator: string;
+    isGlobal: boolean;
+    defaultAccelerator: string;
+    enabled: boolean;
+    defaultEnabled: boolean;
+};
+
+const BACKEND_ID_BY_ACTION: Record<ShortcutActionId, string> = {
+    whatToAnswer: 'chat:whatToAnswer',
+    shorten: 'chat:shorten',
+    followUp: 'chat:followUp',
+    recap: 'chat:recap',
+    answer: 'chat:answer',
+    scrollUp: 'chat:scrollUp',
+    scrollDown: 'chat:scrollDown',
+    moveWindowUp: 'window:move-up',
+    moveWindowDown: 'window:move-down',
+    moveWindowLeft: 'window:move-left',
+    moveWindowRight: 'window:move-right',
+    toggleVisibility: 'general:toggle-visibility',
+    processScreenshots: 'general:process-screenshots',
+    captureAndProcess: 'general:capture-and-process',
+    resetCancel: 'general:reset-cancel',
+    takeScreenshot: 'general:take-screenshot',
+    selectiveScreenshot: 'general:selective-screenshot'
+};
+
+const ACTION_BY_BACKEND_ID = Object.fromEntries(
+    Object.entries(BACKEND_ID_BY_ACTION).map(([actionId, backendId]) => [backendId, actionId])
+) as Record<string, ShortcutActionId>;
+
 export const DEFAULT_SHORTCUTS: ShortcutConfig = {
     whatToAnswer: ['⌘', '1'],
     shorten: ['⌘', '2'],
     followUp: ['⌘', '3'],
     recap: ['⌘', '4'],
     answer: ['⌘', '5'],
-    scrollUp: ['↑'],
-    scrollDown: ['↓'],
+    scrollUp: ['⌘', '↑'],
+    scrollDown: ['⌘', '↓'],
     moveWindowUp: ['⌘', '↑'],
     moveWindowDown: ['⌘', '↓'],
     moveWindowLeft: ['⌘', '←'],
     moveWindowRight: ['⌘', '→'],
     toggleVisibility: ['⌘', 'B'],
     processScreenshots: ['⌘', 'Enter'],
-    captureAndProcess: ['⌘', 'Shift', 'Enter'],
+    captureAndProcess: ['⌘', '⇧', 'Enter'],
     resetCancel: ['⌘', 'R'],
     takeScreenshot: ['⌘', 'H'],
-    selectiveScreenshot: ['⌘', 'Shift', 'H']
+    selectiveScreenshot: ['⌘', '⇧', 'H']
+};
+
+export const DEFAULT_SHORTCUT_ENABLED: ShortcutEnabledConfig = {
+    whatToAnswer: true,
+    shorten: true,
+    followUp: true,
+    recap: true,
+    answer: true,
+    scrollUp: true,
+    scrollDown: true,
+    moveWindowUp: true,
+    moveWindowDown: true,
+    moveWindowLeft: true,
+    moveWindowRight: true,
+    toggleVisibility: true,
+    processScreenshots: true,
+    captureAndProcess: true,
+    resetCancel: true,
+    takeScreenshot: true,
+    selectiveScreenshot: true
 };
 
 export const useShortcuts = () => {
-    // Initialize state with defaults
     const [shortcuts, setShortcuts] = useState<ShortcutConfig>(DEFAULT_SHORTCUTS);
+    const [shortcutEnabled, setShortcutEnabledState] = useState<ShortcutEnabledConfig>(DEFAULT_SHORTCUT_ENABLED);
 
-    // Map backend keybinds (array of objects) to frontend state (ShortcutConfig)
-    const mapBackendToFrontend = useCallback((backendKeybinds: any[]) => {
-        setShortcuts(prev => {
-            const newShortcuts: any = { ...prev };
+    const mapBackendToFrontend = useCallback((backendKeybinds: BackendKeybind[]) => {
+        const nextShortcuts: ShortcutConfig = { ...DEFAULT_SHORTCUTS };
+        const nextEnabled: ShortcutEnabledConfig = { ...DEFAULT_SHORTCUT_ENABLED };
 
-            backendKeybinds.forEach(kb => {
-                const keys = acceleratorToKeys(kb.accelerator);
+        backendKeybinds.forEach((keybind) => {
+            const actionId = ACTION_BY_BACKEND_ID[keybind.id];
+            if (!actionId) return;
 
-                // Map backend IDs to frontend keys
-                if (kb.id === 'chat:whatToAnswer') newShortcuts.whatToAnswer = keys;
-                else if (kb.id === 'chat:shorten') newShortcuts.shorten = keys;
-                else if (kb.id === 'chat:followUp') newShortcuts.followUp = keys;
-                else if (kb.id === 'chat:recap') newShortcuts.recap = keys;
-                else if (kb.id === 'chat:answer') newShortcuts.answer = keys;
-                else if (kb.id === 'chat:scrollUp') newShortcuts.scrollUp = keys;
-                else if (kb.id === 'chat:scrollDown') newShortcuts.scrollDown = keys;
-                // Window
-                else if (kb.id === 'window:move-up') newShortcuts.moveWindowUp = keys;
-                else if (kb.id === 'window:move-down') newShortcuts.moveWindowDown = keys;
-                else if (kb.id === 'window:move-left') newShortcuts.moveWindowLeft = keys;
-                else if (kb.id === 'window:move-right') newShortcuts.moveWindowRight = keys;
-                // General
-                else if (kb.id === 'general:toggle-visibility') newShortcuts.toggleVisibility = keys;
-                else if (kb.id === 'general:process-screenshots') newShortcuts.processScreenshots = keys;
-                else if (kb.id === 'general:capture-and-process') newShortcuts.captureAndProcess = keys;
-                else if (kb.id === 'general:reset-cancel') newShortcuts.resetCancel = keys;
-                else if (kb.id === 'general:take-screenshot') newShortcuts.takeScreenshot = keys;
-                else if (kb.id === 'general:selective-screenshot') newShortcuts.selectiveScreenshot = keys;
-            });
-
-            return newShortcuts;
+            nextShortcuts[actionId] = acceleratorToKeys(keybind.accelerator);
+            nextEnabled[actionId] = keybind.enabled !== false;
         });
+
+        setShortcuts(nextShortcuts);
+        setShortcutEnabledState(nextEnabled);
     }, []);
 
-    // Load from Main Process on mount
     useEffect(() => {
         const fetchKeybinds = async () => {
             try {
@@ -95,7 +130,6 @@ export const useShortcuts = () => {
 
         fetchKeybinds();
 
-        // Listen for updates
         const unsubscribe = window.electronAPI.onKeybindsUpdate((keybinds) => {
             mapBackendToFrontend(keybinds);
         });
@@ -103,46 +137,32 @@ export const useShortcuts = () => {
         return unsubscribe;
     }, [mapBackendToFrontend]);
 
-    // Function to update a specific shortcut
-    const updateShortcut = useCallback(async (actionId: keyof ShortcutConfig, keys: string[]) => {
-        // Optimistic update
-        setShortcuts(prev => ({ ...prev, [actionId]: keys }));
+    const updateShortcut = useCallback(async (actionId: ShortcutActionId, keys: string[]) => {
+        setShortcuts((prev) => ({ ...prev, [actionId]: keys }));
 
-        const accelerator = keysToAccelerator(keys);
-        let backendId = '';
+        const backendId = BACKEND_ID_BY_ACTION[actionId];
+        if (!backendId) return;
 
-        // Map frontend key back to backend ID
-        if (actionId === 'whatToAnswer') backendId = 'chat:whatToAnswer';
-        else if (actionId === 'shorten') backendId = 'chat:shorten';
-        else if (actionId === 'followUp') backendId = 'chat:followUp';
-        else if (actionId === 'recap') backendId = 'chat:recap';
-        else if (actionId === 'answer') backendId = 'chat:answer';
-        else if (actionId === 'scrollUp') backendId = 'chat:scrollUp';
-        else if (actionId === 'scrollDown') backendId = 'chat:scrollDown';
-        // Window
-        else if (actionId === 'moveWindowUp') backendId = 'window:move-up';
-        else if (actionId === 'moveWindowDown') backendId = 'window:move-down';
-        else if (actionId === 'moveWindowLeft') backendId = 'window:move-left';
-        else if (actionId === 'moveWindowRight') backendId = 'window:move-right';
-        // General
-        else if (actionId === 'toggleVisibility') backendId = 'general:toggle-visibility';
-        else if (actionId === 'processScreenshots') backendId = 'general:process-screenshots';
-        else if (actionId === 'captureAndProcess') backendId = 'general:capture-and-process';
-        else if (actionId === 'resetCancel') backendId = 'general:reset-cancel';
-        else if (actionId === 'takeScreenshot') backendId = 'general:take-screenshot';
-        else if (actionId === 'selectiveScreenshot') backendId = 'general:selective-screenshot';
-
-        if (backendId) {
-            try {
-                await window.electronAPI.setKeybind(backendId, accelerator);
-            } catch (error) {
-                console.error(`Failed to set keybind for ${actionId}:`, error);
-                // Revert optimistic update if needed? For now, we rely on the next update from backend or refresh.
-            }
+        try {
+            await window.electronAPI.setKeybind(backendId, keysToAccelerator(keys));
+        } catch (error) {
+            console.error(`Failed to set keybind for ${actionId}:`, error);
         }
     }, []);
 
-    // Function to reset all shortcuts to defaults
+    const setShortcutEnabled = useCallback(async (actionId: ShortcutActionId, enabled: boolean) => {
+        setShortcutEnabledState((prev) => ({ ...prev, [actionId]: enabled }));
+
+        const backendId = BACKEND_ID_BY_ACTION[actionId];
+        if (!backendId) return;
+
+        try {
+            await window.electronAPI.setKeybindEnabled(backendId, enabled);
+        } catch (error) {
+            console.error(`Failed to set keybind enabled for ${actionId}:`, error);
+        }
+    }, []);
+
     const resetShortcuts = useCallback(async () => {
         try {
             const defaults = await window.electronAPI.resetKeybinds();
@@ -152,49 +172,43 @@ export const useShortcuts = () => {
         }
     }, [mapBackendToFrontend]);
 
-    // Helper to check if a keyboard event matches a configured shortcut
-    const isShortcutPressed = useCallback((event: KeyboardEvent | React.KeyboardEvent, actionId: keyof ShortcutConfig): boolean => {
+    const isShortcutPressed = useCallback((event: KeyboardEvent | React.KeyboardEvent, actionId: ShortcutActionId): boolean => {
+        if (!shortcutEnabled[actionId]) return false;
+
         const keys = shortcuts[actionId];
         if (!keys || keys.length === 0) return false;
 
-        // Check modifiers
-        // Note: We use the symbols now in UI, but keyboard events still use standard properties
-        const hasMeta = keys.some(k => ['⌘', 'Command', 'Meta'].includes(k));
-        const hasCtrl = keys.some(k => ['⌃', 'Control', 'Ctrl'].includes(k));
-        const hasAlt = keys.some(k => ['⌥', 'Alt', 'Option'].includes(k));
-        const hasShift = keys.some(k => ['⇧', 'Shift'].includes(k));
+        const hasMeta = keys.some((key) => ['⌘', 'Command', 'Meta'].includes(key));
+        const hasCtrl = keys.some((key) => ['⌃', 'Control', 'Ctrl'].includes(key));
+        const hasAlt = keys.some((key) => ['⌥', 'Alt', 'Option'].includes(key));
+        const hasShift = keys.some((key) => ['⇧', 'Shift'].includes(key));
 
         if (event.metaKey !== hasMeta) return false;
         if (event.ctrlKey !== hasCtrl) return false;
         if (event.altKey !== hasAlt) return false;
         if (event.shiftKey !== hasShift) return false;
 
-        // Find the main non-modifier key
-        const mainKey = keys.find(k =>
-            !['⌘', 'Command', 'Meta', '⇧', 'Shift', '⌥', 'Alt', 'Option', '⌃', 'Control', 'Ctrl'].includes(k)
+        const mainKey = keys.find((key) =>
+            !['⌘', 'Command', 'Meta', '⇧', 'Shift', '⌥', 'Alt', 'Option', '⌃', 'Control', 'Ctrl'].includes(key)
         );
 
-        if (!mainKey) return false; // Modifiers only
+        if (!mainKey) return false;
 
-        // Normalize checks
         const eventKey = event.key.toLowerCase();
         const configKey = mainKey.toLowerCase();
 
-        // Handle Space specifically
         if (configKey === 'space') {
             return event.code === 'Space';
         }
 
-        // Handle Arrow keys
-        // Electron accelerator uses 'ArrowUp' (mapped from 'Up'), event.key is 'ArrowUp'
-        // So direct comparison usually works
-
         return eventKey === configKey;
-    }, [shortcuts]);
+    }, [shortcutEnabled, shortcuts]);
 
     return {
         shortcuts,
+        shortcutEnabled,
         updateShortcut,
+        setShortcutEnabled,
         resetShortcuts,
         isShortcutPressed
     };

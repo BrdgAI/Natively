@@ -8,31 +8,33 @@ export interface KeybindConfig {
     accelerator: string; // Electron Accelerator string
     isGlobal: boolean;   // Registered with globalShortcut
     defaultAccelerator: string;
+    enabled: boolean;
+    defaultEnabled: boolean;
 }
 
 export const DEFAULT_KEYBINDS: KeybindConfig[] = [
     // General
-    { id: 'general:toggle-visibility', label: 'Toggle Visibility', accelerator: 'CommandOrControl+B', isGlobal: true, defaultAccelerator: 'CommandOrControl+B' },
-    { id: 'general:process-screenshots', label: 'Process Screenshots', accelerator: 'CommandOrControl+Enter', isGlobal: true, defaultAccelerator: 'CommandOrControl+Enter' },
-    { id: 'general:capture-and-process', label: 'Capture Screen & Ask AI (Global)', accelerator: 'CommandOrControl+Shift+Enter', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Enter' },
-    { id: 'general:reset-cancel', label: 'Reset / Cancel', accelerator: 'CommandOrControl+R', isGlobal: true, defaultAccelerator: 'CommandOrControl+R' },
-    { id: 'general:take-screenshot', label: 'Take Screenshot', accelerator: 'CommandOrControl+H', isGlobal: true, defaultAccelerator: 'CommandOrControl+H' },
-    { id: 'general:selective-screenshot', label: 'Selective Screenshot', accelerator: 'CommandOrControl+Shift+H', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+H' },
+    { id: 'general:toggle-visibility', label: 'Toggle Visibility', accelerator: 'CommandOrControl+B', isGlobal: true, defaultAccelerator: 'CommandOrControl+B', enabled: true, defaultEnabled: true },
+    { id: 'general:process-screenshots', label: 'Process Screenshots', accelerator: 'CommandOrControl+Enter', isGlobal: true, defaultAccelerator: 'CommandOrControl+Enter', enabled: true, defaultEnabled: true },
+    { id: 'general:capture-and-process', label: 'Capture Screen & Ask AI (Global)', accelerator: 'CommandOrControl+Shift+Enter', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Enter', enabled: true, defaultEnabled: true },
+    { id: 'general:reset-cancel', label: 'Reset / Cancel', accelerator: 'CommandOrControl+R', isGlobal: true, defaultAccelerator: 'CommandOrControl+R', enabled: true, defaultEnabled: true },
+    { id: 'general:take-screenshot', label: 'Take Screenshot', accelerator: 'CommandOrControl+H', isGlobal: true, defaultAccelerator: 'CommandOrControl+H', enabled: true, defaultEnabled: true },
+    { id: 'general:selective-screenshot', label: 'Selective Screenshot', accelerator: 'CommandOrControl+Shift+H', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+H', enabled: true, defaultEnabled: true },
 
     // Chat - Global shortcuts (work even when app is not focused - stealth mode)
-    { id: 'chat:whatToAnswer', label: 'What to Answer', accelerator: 'CommandOrControl+1', isGlobal: true, defaultAccelerator: 'CommandOrControl+1' },
-    { id: 'chat:shorten', label: 'Shorten', accelerator: 'CommandOrControl+2', isGlobal: true, defaultAccelerator: 'CommandOrControl+2' },
-    { id: 'chat:followUp', label: 'Follow Up', accelerator: 'CommandOrControl+3', isGlobal: true, defaultAccelerator: 'CommandOrControl+3' },
-    { id: 'chat:recap', label: 'Recap', accelerator: 'CommandOrControl+4', isGlobal: true, defaultAccelerator: 'CommandOrControl+4' },
-    { id: 'chat:answer', label: 'Answer / Record', accelerator: 'CommandOrControl+5', isGlobal: true, defaultAccelerator: 'CommandOrControl+5' },
-    { id: 'chat:scrollUp', label: 'Scroll Up', accelerator: 'CommandOrControl+Up', isGlobal: true, defaultAccelerator: 'CommandOrControl+Up' },
-    { id: 'chat:scrollDown', label: 'Scroll Down', accelerator: 'CommandOrControl+Down', isGlobal: true, defaultAccelerator: 'CommandOrControl+Down' },
+    { id: 'chat:whatToAnswer', label: 'What to Answer', accelerator: 'CommandOrControl+1', isGlobal: true, defaultAccelerator: 'CommandOrControl+1', enabled: true, defaultEnabled: true },
+    { id: 'chat:shorten', label: 'Shorten', accelerator: 'CommandOrControl+2', isGlobal: true, defaultAccelerator: 'CommandOrControl+2', enabled: true, defaultEnabled: true },
+    { id: 'chat:followUp', label: 'Follow Up', accelerator: 'CommandOrControl+3', isGlobal: true, defaultAccelerator: 'CommandOrControl+3', enabled: true, defaultEnabled: true },
+    { id: 'chat:recap', label: 'Recap', accelerator: 'CommandOrControl+4', isGlobal: true, defaultAccelerator: 'CommandOrControl+4', enabled: true, defaultEnabled: true },
+    { id: 'chat:answer', label: 'Answer / Record', accelerator: 'CommandOrControl+5', isGlobal: true, defaultAccelerator: 'CommandOrControl+5', enabled: true, defaultEnabled: true },
+    { id: 'chat:scrollUp', label: 'Scroll Up', accelerator: 'CommandOrControl+Up', isGlobal: true, defaultAccelerator: 'CommandOrControl+Up', enabled: true, defaultEnabled: true },
+    { id: 'chat:scrollDown', label: 'Scroll Down', accelerator: 'CommandOrControl+Down', isGlobal: true, defaultAccelerator: 'CommandOrControl+Down', enabled: true, defaultEnabled: true },
 
     // Window Movement - Global shortcuts (stealth window positioning)
-    { id: 'window:move-up', label: 'Move Window Up', accelerator: 'CommandOrControl+Up', isGlobal: true, defaultAccelerator: 'CommandOrControl+Up' },
-    { id: 'window:move-down', label: 'Move Window Down', accelerator: 'CommandOrControl+Down', isGlobal: true, defaultAccelerator: 'CommandOrControl+Down' },
-    { id: 'window:move-left', label: 'Move Window Left', accelerator: 'CommandOrControl+Left', isGlobal: true, defaultAccelerator: 'CommandOrControl+Left' },
-    { id: 'window:move-right', label: 'Move Window Right', accelerator: 'CommandOrControl+Right', isGlobal: true, defaultAccelerator: 'CommandOrControl+Right' },
+    { id: 'window:move-up', label: 'Move Window Up', accelerator: 'CommandOrControl+Up', isGlobal: true, defaultAccelerator: 'CommandOrControl+Up', enabled: true, defaultEnabled: true },
+    { id: 'window:move-down', label: 'Move Window Down', accelerator: 'CommandOrControl+Down', isGlobal: true, defaultAccelerator: 'CommandOrControl+Down', enabled: true, defaultEnabled: true },
+    { id: 'window:move-left', label: 'Move Window Left', accelerator: 'CommandOrControl+Left', isGlobal: true, defaultAccelerator: 'CommandOrControl+Left', enabled: true, defaultEnabled: true },
+    { id: 'window:move-right', label: 'Move Window Right', accelerator: 'CommandOrControl+Right', isGlobal: true, defaultAccelerator: 'CommandOrControl+Right', enabled: true, defaultEnabled: true },
 ];
 
 export class KeybindManager {
@@ -81,7 +83,12 @@ export class KeybindManager {
                 for (const fileKb of data) {
                     if (this.keybinds.has(fileKb.id)) {
                         const current = this.keybinds.get(fileKb.id)!;
-                        current.accelerator = fileKb.accelerator;
+                        if (typeof fileKb.accelerator === 'string') {
+                            current.accelerator = fileKb.accelerator;
+                        }
+                        if (typeof fileKb.enabled === 'boolean') {
+                            current.enabled = fileKb.enabled;
+                        }
                         this.keybinds.set(fileKb.id, current);
                     }
                 }
@@ -95,7 +102,8 @@ export class KeybindManager {
         try {
             const data = Array.from(this.keybinds.values()).map(kb => ({
                 id: kb.id,
-                accelerator: kb.accelerator
+                accelerator: kb.accelerator,
+                enabled: kb.enabled
             }));
             const tmpPath = this.filePath + '.tmp';
             fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2));
@@ -107,6 +115,14 @@ export class KeybindManager {
 
     public getKeybind(id: string): string | undefined {
         return this.keybinds.get(id)?.accelerator;
+    }
+
+    public getKeybindConfig(id: string): KeybindConfig | undefined {
+        return this.keybinds.get(id);
+    }
+
+    public isKeybindEnabled(id: string): boolean {
+        return this.keybinds.get(id)?.enabled ?? false;
     }
 
     public getAllKeybinds(): KeybindConfig[] {
@@ -122,6 +138,18 @@ export class KeybindManager {
 
         this.save();
         this.registerGlobalShortcuts(); // Re-register if it was a global one
+        this.broadcastUpdate();
+    }
+
+    public setKeybindEnabled(id: string, enabled: boolean) {
+        if (!this.keybinds.has(id)) return;
+
+        const kb = this.keybinds.get(id)!;
+        kb.enabled = enabled;
+        this.keybinds.set(id, kb);
+
+        this.save();
+        this.registerGlobalShortcuts();
         this.broadcastUpdate();
     }
 
@@ -141,7 +169,7 @@ export class KeybindManager {
         // CommandOrControl+Up) are fired from a single OS-level registration.
         const acceleratorMap = new Map<string, string[]>(); // accelerator -> [actionId]
         this.keybinds.forEach(kb => {
-            if (kb.isGlobal && kb.accelerator && kb.accelerator.trim() !== '') {
+            if (kb.enabled && kb.isGlobal && kb.accelerator && kb.accelerator.trim() !== '') {
                 const acc = kb.accelerator.trim();
                 if (!acceleratorMap.has(acc)) {
                     acceleratorMap.set(acc, []);
@@ -168,8 +196,13 @@ export class KeybindManager {
     }
 
     public updateMenu() {
-        const toggleKb = this.keybinds.get('general:toggle-visibility');
-        const toggleAccelerator = toggleKb ? toggleKb.accelerator : 'CommandOrControl+B';
+        const getMenuAccelerator = (id: string, fallback: string): string | undefined => {
+            const keybind = this.keybinds.get(id);
+            if (!keybind?.enabled) return undefined;
+            return keybind.accelerator || fallback;
+        };
+
+        const toggleAccelerator = getMenuAccelerator('general:toggle-visibility', 'CommandOrControl+B');
 
         const template: any[] = [
             {
@@ -204,22 +237,22 @@ export class KeybindManager {
                     { type: 'separator' },
                     {
                         label: 'Move Window Up',
-                        accelerator: this.getKeybind('window:move-up') || 'CommandOrControl+Up',
+                        accelerator: getMenuAccelerator('window:move-up', 'CommandOrControl+Up'),
                         click: () => this.windowHelper?.moveWindowUp()
                     },
                     {
                         label: 'Move Window Down',
-                        accelerator: this.getKeybind('window:move-down') || 'CommandOrControl+Down',
+                        accelerator: getMenuAccelerator('window:move-down', 'CommandOrControl+Down'),
                         click: () => this.windowHelper?.moveWindowDown()
                     },
                     {
                         label: 'Move Window Left',
-                        accelerator: this.getKeybind('window:move-left') || 'CommandOrControl+Left',
+                        accelerator: getMenuAccelerator('window:move-left', 'CommandOrControl+Left'),
                         click: () => this.windowHelper?.moveWindowLeft()
                     },
                     {
                         label: 'Move Window Right',
-                        accelerator: this.getKeybind('window:move-right') || 'CommandOrControl+Right',
+                        accelerator: getMenuAccelerator('window:move-right', 'CommandOrControl+Right'),
                         click: () => this.windowHelper?.moveWindowRight()
                     },
                     { type: 'separator' },
@@ -277,6 +310,12 @@ export class KeybindManager {
         ipcMain.handle('keybinds:set', (_, id: string, accelerator: string) => {
             console.log(`[KeybindManager] Set ${id} -> ${accelerator}`);
             this.setKeybind(id, accelerator);
+            return true;
+        });
+
+        ipcMain.handle('keybinds:set-enabled', (_, id: string, enabled: boolean) => {
+            console.log(`[KeybindManager] Set enabled ${id} -> ${enabled}`);
+            this.setKeybindEnabled(id, enabled);
             return true;
         });
 

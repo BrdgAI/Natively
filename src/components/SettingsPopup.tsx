@@ -4,7 +4,7 @@ import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 
 const SettingsPopup = () => {
-    const { shortcuts } = useShortcuts();
+    const { shortcuts, shortcutEnabled } = useShortcuts();
     const isLightTheme = useResolvedTheme() === 'light';
     const [isUndetectable, setIsUndetectable] = useState(false);
     const [useGroqFastText, setUseGroqFastText] = useState(() => {
@@ -170,6 +170,18 @@ const SettingsPopup = () => {
         : 'border-white/10 bg-white/5 text-slate-500';
     const defaultToggleTrackClass = isLightTheme ? 'bg-black/10' : 'bg-white/10';
     const toggleKnobClass = isLightTheme ? 'bg-white shadow-[0_1px_4px_rgba(0,0,0,0.18)]' : 'bg-black shadow-sm';
+    const shortcutOffClass = isLightTheme ? 'text-slate-500' : 'text-slate-500';
+
+    const renderShortcutKeys = (keys: string[], enabled: boolean) => (
+        <div className="flex items-center gap-1">
+            {!enabled && <span className={`text-[10px] uppercase tracking-wide ${shortcutOffClass}`}>Off</span>}
+            {keys.map((key, index) => (
+                <div key={index} className={`px-1.5 py-0.5 rounded border text-[10px] font-medium min-w-[20px] text-center ${shortcutKeyClass} ${enabled ? '' : 'opacity-40'}`}>
+                    {key}
+                </div>
+            ))}
+        </div>
+    );
 
     return (
         <div className="w-fit h-fit bg-transparent flex flex-col">
@@ -277,34 +289,24 @@ const SettingsPopup = () => {
                 <div className={`h-px my-0.5 mx-2 ${dividerClass}`} />
 
                 {/* Show/Hide Natively */}
-                <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group interaction-base interaction-press ${itemHoverClass}`}>
+                <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group interaction-base interaction-press ${itemHoverClass} ${shortcutEnabled.toggleVisibility ? '' : 'opacity-55'}`}>
                     <div className="flex items-center gap-3">
                         <MessageSquare className={`w-3.5 h-3.5 transition-colors ${iconInactiveClass}`} />
                         <span className={`text-[12px] transition-colors ${labelInactiveClass}`}>Show/Hide</span>
                     </div>
                     <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                        {/* Dynamic Keys for Toggle Visibility */}
-                        {(shortcuts.toggleVisibility || ['⌘', 'B']).map((key, index) => (
-                            <div key={index} className={`px-1.5 py-0.5 rounded border text-[10px] font-medium min-w-[20px] text-center ${shortcutKeyClass}`}>
-                                {key}
-                            </div>
-                        ))}
+                        {renderShortcutKeys(shortcuts.toggleVisibility || ['⌘', 'B'], shortcutEnabled.toggleVisibility)}
                     </div>
                 </div>
 
                 {/* Screenshot */}
-                <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group interaction-base interaction-press ${itemHoverClass}`}>
+                <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group interaction-base interaction-press ${itemHoverClass} ${shortcutEnabled.takeScreenshot ? '' : 'opacity-55'}`}>
                     <div className="flex items-center gap-3">
                         <Camera className={`w-3.5 h-3.5 transition-colors ${iconInactiveClass}`} />
                         <span className={`text-[12px] transition-colors ${labelInactiveClass}`}>Screenshot</span>
                     </div>
                     <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                        {/* Dynamic Keys for Take Screenshot */}
-                        {(shortcuts.takeScreenshot || ['⌘', 'H']).map((key, index) => (
-                            <div key={index} className={`px-1.5 py-0.5 rounded border text-[10px] font-medium min-w-[20px] text-center ${shortcutKeyClass}`}>
-                                {key}
-                            </div>
-                        ))}
+                        {renderShortcutKeys(shortcuts.takeScreenshot || ['⌘', 'H'], shortcutEnabled.takeScreenshot)}
                     </div>
                 </div>
 

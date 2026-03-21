@@ -243,9 +243,10 @@ export interface ElectronAPI {
   setDonationComplete: () => Promise<{ success: boolean }>;
 
   // Keybind Management
-  getKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string }>>
+  getKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string; enabled: boolean; defaultEnabled: boolean }>>
   setKeybind: (id: string, accelerator: string) => Promise<boolean>
-  resetKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string }>>
+  setKeybindEnabled: (id: string, enabled: boolean) => Promise<boolean>
+  resetKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string; enabled: boolean; defaultEnabled: boolean }>>
   onKeybindsUpdate: (callback: (keybinds: Array<any>) => void) => () => void
   onGlobalShortcut: (callback: (data: { action: string }) => void) => () => void
 

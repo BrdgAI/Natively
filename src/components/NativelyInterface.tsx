@@ -74,7 +74,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const isLightTheme = useResolvedTheme() === 'light';
     const [isExpanded, setIsExpanded] = useState(true);
     const [inputValue, setInputValue] = useState('');
-    const { shortcuts, isShortcutPressed } = useShortcuts();
+    const { shortcuts, shortcutEnabled, isShortcutPressed } = useShortcuts();
     const [messages, setMessages] = useState<Message[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -288,7 +288,12 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     useEffect(() => {
         if (!window.electronAPI?.onToggleExpand) return;
         const unsubscribe = window.electronAPI.onToggleExpand(() => {
-            setIsExpanded(prev => !prev);
+            setIsExpanded(prev => {
+                if (!prev) {
+                    isStealthRef.current = true;
+                }
+                return !prev;
+            });
         });
         return () => unsubscribe();
     }, []);
@@ -1455,15 +1460,8 @@ Provide only the answer, nothing else.`;
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isShortcutPressed]);
 
-    // General Global Shortcuts (Rebindable)
-    // We listen here to handle them when the window is focused (renderer side)
-    // Global shortcuts (when window blurred) are handled by Main process -> GlobalShortcuts
-    // But Main process events might not reach here if we don't listen, or we want unified handling.
-    // Actually, KeybindManager registers global shortcuts. If they are registered as global, 
-    // Electron might consume them before they reach here?
-    // 'toggle-app' is Global.
-    // 'toggle-visibility' is NOT Global in default config (isGlobal: false), so it depends on focus.
-    // So we MUST listen for them here.
+    // General shortcuts still need focused-window handling so they work when Natively
+    // already owns focus, and so disabled shortcuts are consistently ignored in-app.
 
     const generalHandlersRef = useRef({
         toggleVisibility: () => window.electronAPI.toggleWindow(),
@@ -1583,6 +1581,7 @@ Provide only the answer, nothing else.`;
     useEffect(() => {
         if (!window.electronAPI.onCaptureAndProcess) return;
         const unsubscribe = window.electronAPI.onCaptureAndProcess((data) => {
+            isStealthRef.current = true;
             setIsExpanded(true);
             setAttachedContext(prev => {
                 if (prev.some(s => s.path === data.path)) return prev;
@@ -1828,16 +1827,20 @@ Provide only the answer, nothing else.`;
                                     {/* Custom Rich Placeholder */}
                                     {!inputValue && (
                                         <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] overlay-text-muted">
-                                            <span>Ask anything on screen or conversation, or</span>
-                                            <div className="flex items-center gap-1 opacity-80">
-                                                {(shortcuts.selectiveScreenshot || ['⌘', 'Shift', 'H']).map((key, i) => (
-                                                    <React.Fragment key={i}>
-                                                        {i > 0 && <span className="text-[10px]">+</span>}
-                                                        <kbd className="px-1.5 py-0.5 rounded border text-[10px] font-sans min-w-[20px] text-center overlay-control-surface overlay-text-secondary" style={appearance.controlStyle}>{key}</kbd>
-                                                    </React.Fragment>
-                                                ))}
-                                            </div>
-                                            <span>for selective screenshot</span>
+                                            <span>Ask anything on screen or conversation{shortcutEnabled.selectiveScreenshot ? ', or' : ''}</span>
+                                            {shortcutEnabled.selectiveScreenshot && (
+                                                <>
+                                                    <div className="flex items-center gap-1 opacity-80">
+                                                        {(shortcuts.selectiveScreenshot || ['⌘', 'Shift', 'H']).map((key, i) => (
+                                                            <React.Fragment key={i}>
+                                                                {i > 0 && <span className="text-[10px]">+</span>}
+                                                                <kbd className="px-1.5 py-0.5 rounded border text-[10px] font-sans min-w-[20px] text-center overlay-control-surface overlay-text-secondary" style={appearance.controlStyle}>{key}</kbd>
+                                                            </React.Fragment>
+                                                        ))}
+                                                    </div>
+                                                    <span>for selective screenshot</span>
+                                                </>
+                                            )}
                                         </div>
                                     )}
 
