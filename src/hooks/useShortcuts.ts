@@ -14,6 +14,7 @@ export interface ShortcutConfig {
     moveWindowLeft: string[];
     moveWindowRight: string[];
     toggleVisibility: string[];
+    toggleMousePassthrough: string[];
     processScreenshots: string[];
     captureAndProcess: string[];
     resetCancel: string[];
@@ -47,6 +48,7 @@ const BACKEND_ID_BY_ACTION: Record<ShortcutActionId, string> = {
     moveWindowLeft: 'window:move-left',
     moveWindowRight: 'window:move-right',
     toggleVisibility: 'general:toggle-visibility',
+    toggleMousePassthrough: 'general:toggle-mouse-passthrough',
     processScreenshots: 'general:process-screenshots',
     captureAndProcess: 'general:capture-and-process',
     resetCancel: 'general:reset-cancel',
@@ -71,6 +73,7 @@ export const DEFAULT_SHORTCUTS: ShortcutConfig = {
     moveWindowLeft: ['⌘', '←'],
     moveWindowRight: ['⌘', '→'],
     toggleVisibility: ['⌘', 'B'],
+    toggleMousePassthrough: ['⌘', '⇧', 'B'],
     processScreenshots: ['⌘', 'Enter'],
     captureAndProcess: ['⌘', '⇧', 'Enter'],
     resetCancel: ['⌘', 'R'],
@@ -91,6 +94,7 @@ export const DEFAULT_SHORTCUT_ENABLED: ShortcutEnabledConfig = {
     moveWindowLeft: true,
     moveWindowRight: true,
     toggleVisibility: true,
+    toggleMousePassthrough: true,
     processScreenshots: true,
     captureAndProcess: true,
     resetCancel: true,
