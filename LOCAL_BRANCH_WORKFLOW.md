@@ -70,6 +70,14 @@ npm run build:native
 cargo check
 ```
 
+Helpful local commands:
+
+```bash
+npm run sync:local-product
+npm run feature:new -- <feature-name>
+npm run check:electron-entrypoint
+```
+
 ## Critical Electron Entrypoint Check
 
 This repo is sensitive to stale Electron build output.
