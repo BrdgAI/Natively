@@ -2,14 +2,24 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import InterviewCodePanel from './InterviewCodePanel'
 import InterviewControlStrip from './InterviewControlStrip'
+import InterviewExtractedTextPanel from './InterviewExtractedTextPanel'
 import InterviewMainPanel from './InterviewMainPanel'
 import InterviewNotesRail from './InterviewNotesRail'
+import InterviewQuickAnswersPanel from './InterviewQuickAnswersPanel'
 import InterviewTopStrip from './InterviewTopStrip'
-import type { InterviewSessionSnapshot } from '../../types/interview'
+import type { InterviewPhaseDocumentMap, InterviewSessionSnapshot, RenderableInterviewPhase } from '../../types/interview'
 
 interface InterviewOverlayProps {
   overlayOpacity: number
   onEndMeeting: () => void
+}
+
+const EMPTY_PHASE_DOCUMENTS: InterviewPhaseDocumentMap = {
+  p2_clarify: createEmptyPhaseDocument('p2_clarify'),
+  p3_approach: createEmptyPhaseDocument('p3_approach'),
+  p4_code: createEmptyPhaseDocument('p4_code'),
+  p5_test: createEmptyPhaseDocument('p5_test'),
+  p6_follow_up: createEmptyPhaseDocument('p6_follow_up'),
 }
 
 const EMPTY_SNAPSHOT: InterviewSessionSnapshot = {
@@ -29,6 +39,7 @@ const EMPTY_SNAPSHOT: InterviewSessionSnapshot = {
   problemStatement: '',
   clarifiedFacts: [],
   openQuestions: [],
+  clarificationItems: [],
   constraints: [],
   examples: [],
   approachSummary: [],
@@ -36,6 +47,8 @@ const EMPTY_SNAPSHOT: InterviewSessionSnapshot = {
   thoughtNotes: [],
   quickQuestions: [],
   requirementChanges: [],
+  activeFollowUp: null,
+  phaseDocuments: EMPTY_PHASE_DOCUMENTS,
   lastTranscriptAt: null,
   lastScreenshotAt: null,
   lastTranscriptSnippet: '',
@@ -122,23 +135,27 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
     }
   }, [])
 
+  const activePhase = useMemo<RenderableInterviewPhase>(
+    () => normalizePhase(snapshot.manualOverridePhase || snapshot.phase),
+    [snapshot.manualOverridePhase, snapshot.phase]
+  )
+
+  const activeDocument = useMemo(
+    () => snapshot.phaseDocuments[activePhase],
+    [activePhase, snapshot.phaseDocuments]
+  )
+
   useEffect(() => {
     if (!scrollRef.current) {
       return
     }
 
-    if (Math.abs(scrollRef.current.scrollTop - snapshot.mainScrollOffset) > 120) {
-      scrollRef.current.scrollTop = snapshot.mainScrollOffset
+    if (Math.abs(scrollRef.current.scrollTop - activeDocument.scrollOffset) > 120) {
+      scrollRef.current.scrollTop = activeDocument.scrollOffset
     }
-  }, [snapshot.mainScrollOffset])
+  }, [activeDocument.scrollOffset])
 
-  const isControlStripVisible = !!snapshot.controlStripVisibleUntil && snapshot.controlStripVisibleUntil > now
-  const isStale = !snapshot.latestPayload || snapshot.latestPayload.inputRevision < snapshot.inputRevision
-
-  const activePhase = useMemo(
-    () => snapshot.manualOverridePhase || snapshot.phase,
-    [snapshot.manualOverridePhase, snapshot.phase]
-  )
+  const isControlStripVisible = Boolean(snapshot.controlStripVisibleUntil && snapshot.controlStripVisibleUntil > now)
 
   const handleNext = async () => {
     const nextSnapshot = await window.electronAPI?.interviewNext?.()
@@ -184,19 +201,22 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
       return
     }
 
-    target.scrollBy({ top: delta, behavior: 'smooth' })
-    persistScroll(target.scrollTop + delta)
+    const nextOffset = Math.max(0, target.scrollTop + delta)
+    target.scrollTo({ top: nextOffset, behavior: 'smooth' })
+    persistScroll(nextOffset)
   }
 
   return (
     <div
       className="pointer-events-none fixed inset-0 overflow-hidden"
-      style={{ opacity: Math.max(0.7, Math.min(1, 0.65 + overlayOpacity * 0.35)) }}
+      style={{ opacity: Math.max(0.72, Math.min(1, 0.7 + overlayOpacity * 0.28)) }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,250,240,0.34),transparent_55%)]" />
-      <div className="absolute inset-x-0 top-0 h-[38vh] bg-[radial-gradient(circle_at_top,rgba(191,219,254,0.2),transparent_60%)]" />
-      <div className="relative z-10 h-full w-full px-6 pb-6 pt-5">
-        <div className="mx-auto flex h-full max-w-[1540px] flex-col gap-4">
+      <div
+        className="absolute inset-0"
+        style={{ background: 'rgba(26, 23, 20, 0.14)' }}
+      />
+      <div className="relative z-10 h-full w-full px-4 pb-4 pt-3">
+        <div className="mx-auto flex h-full max-w-[1580px] flex-col gap-3">
           <InterviewTopStrip
             phase={snapshot.phase}
             phaseConfidence={snapshot.phaseConfidence}
@@ -205,10 +225,10 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
             lastTranscriptSnippet={snapshot.lastTranscriptSnippet}
             lastTranscriptAt={snapshot.lastTranscriptAt}
             lastScreenshotAt={snapshot.lastScreenshotAt}
-            isStale={isStale}
             mousePassthrough={mousePassthrough}
             textModelLabel={textModelLabel}
             sttLabel={sttLabel}
+            updateSummary={activeDocument.updateSummary}
             now={now}
             onNext={handleNext}
             onSync={handleSync}
@@ -221,6 +241,7 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
               <InterviewControlStrip
                 hint={snapshot.controlStripHint}
                 activePhase={activePhase}
+                mousePassthrough={mousePassthrough}
                 onPrevPhase={() => handlePhaseShift(-1)}
                 onNextPhase={() => handlePhaseShift(1)}
                 onExitInterviewMode={handleExitInterviewMode}
@@ -228,22 +249,75 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
             )}
           </AnimatePresence>
 
-          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.28fr)_420px]">
+          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1.35fr)_430px]">
             <InterviewMainPanel
               snapshot={snapshot}
+              document={activeDocument}
               scrollRef={scrollRef}
               onScroll={handleScroll}
             />
 
-            <div className="flex min-h-0 flex-col gap-4">
-              <InterviewCodePanel snapshot={snapshot} />
-              <InterviewNotesRail snapshot={snapshot} mousePassthrough={mousePassthrough} />
+            <div className="grid min-h-0 gap-3 xl:grid-rows-[minmax(0,1fr)_auto_auto]">
+              <InterviewCodePanel snapshot={snapshot} document={activeDocument} />
+              <InterviewQuickAnswersPanel items={activeDocument.quickAnswers} />
+              <InterviewNotesRail snapshot={snapshot} />
             </div>
           </div>
+
+          <InterviewExtractedTextPanel extractedText={activeDocument.extractedText} />
         </div>
       </div>
     </div>
   )
+}
+
+function createEmptyPhaseDocument(phase: RenderableInterviewPhase) {
+  return {
+    phase,
+    anchor: {
+      title: formatPhase(phase),
+      items: [],
+      writeNow: [],
+      note: null,
+    },
+    mainSections: [],
+    quickAnswers: [],
+    codePanel: null,
+    extractedText: {
+      problemText: '',
+      requirementDelta: [],
+      dryRunInput: '',
+      codeObservations: [],
+      capturedAt: null,
+    },
+    updateSummary: {
+      status: 'partial' as const,
+      updatedSections: [],
+      message: 'Waiting for first update',
+      at: 0,
+    },
+    scrollOffset: 0,
+    lastUpdatedAt: null,
+  }
+}
+
+function normalizePhase(phase: InterviewSessionSnapshot['phase']): RenderableInterviewPhase {
+  return phase === 'p1_intro' ? 'p2_clarify' : phase
+}
+
+function formatPhase(phase: RenderableInterviewPhase): string {
+  switch (phase) {
+    case 'p2_clarify':
+      return 'Clarify'
+    case 'p3_approach':
+      return 'Approach'
+    case 'p4_code':
+      return 'Code'
+    case 'p5_test':
+      return 'Test'
+    case 'p6_follow_up':
+      return 'Follow-up'
+  }
 }
 
 function capitalize(value: string): string {

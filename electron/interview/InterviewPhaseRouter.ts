@@ -5,7 +5,7 @@ const PHASE_SEQUENCE: InterviewPhase[] = [
   'p3_approach',
   'p4_code',
   'p5_test',
-  'p6_close',
+  'p6_follow_up',
 ];
 
 export class InterviewPhaseRouter {
@@ -17,8 +17,8 @@ export class InterviewPhaseRouter {
     const finalTurns = recentTranscript.filter((item) => item.final);
     const joined = finalTurns.slice(-10).map((item) => item.text.toLowerCase()).join('\n');
 
-    if (/(any questions for me|questions for me|wrap up|thanks for your time|close out|final question)/.test(joined)) {
-      return { phase: 'p6_close', confidence: 0.95 };
+    if (/(change the code|modify the code|can you update|what if we also|what if i want|return none|instead of an empty list|follow up|what happens if|explain that part|walk me through that line|any questions for me|questions for me|wrap up|thanks for your time|close out|final question)/.test(joined)) {
+      return { phase: 'p6_follow_up', confidence: 0.95 };
     }
 
     if (/(time complexity|space complexity|edge case|dry run|walk through an example|test case|complexity analysis)/.test(joined)) {

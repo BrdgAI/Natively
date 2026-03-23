@@ -36,3 +36,20 @@ export const TESTING_SCREEN_ANALYSIS: InterviewScreenAnalysis = {
   extractedTests: ['nums = [3,2,4], target = 6 -> [1,2]', 'nums = [3,3], target = 6 -> [0,1]'],
   hints: ['The interviewer wants a dry run and edge cases'],
 };
+
+export const FOLLOW_UP_SCREEN_ANALYSIS: InterviewScreenAnalysis = {
+  screenshotPath: '/tmp/interview-follow-up.png',
+  capturedAt: BASE_TIMESTAMP + 90_000,
+  currentCode: [
+    'def two_sum(nums, target):',
+    '    seen = {}',
+    '    for index, value in enumerate(nums):',
+    '        complement = target - value',
+    '        if complement in seen:',
+    '            return [seen[complement], index]',
+    '        seen[value] = index',
+    '    return []',
+  ].join('\n'),
+  hints: ['Return None instead of an empty list when no pair exists'],
+  likelyMistakes: ['Only the final return line should change for this follow-up'],
+};

@@ -31,8 +31,8 @@ export const TESTING_TURNS: InterviewTranscriptSegment[] = [
   turn(72, 'user', 'Let me dry run this on a small example, then I will cover edge cases and the time complexity.'),
 ];
 
-export const CLOSING_TURNS: InterviewTranscriptSegment[] = [
-  turn(90, 'interviewer', 'Looks good. Any questions for me before we wrap up?'),
+export const FOLLOW_UP_TURNS: InterviewTranscriptSegment[] = [
+  turn(90, 'interviewer', 'Looks good. What if I want you to return None when no pair exists instead of an empty list?'),
 ];
 
 export const FULL_SYNTHETIC_INTERVIEW: InterviewTranscriptSegment[] = [
@@ -40,5 +40,5 @@ export const FULL_SYNTHETIC_INTERVIEW: InterviewTranscriptSegment[] = [
   ...APPROACH_TURNS,
   ...CODING_TURNS,
   ...TESTING_TURNS,
-  ...CLOSING_TURNS,
+  ...FOLLOW_UP_TURNS,
 ];

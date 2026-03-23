@@ -1,82 +1,50 @@
 import React from 'react'
-import { Braces, Bug, FileCode2 } from 'lucide-react'
-import type { InterviewCodePanel as InterviewCodePanelData, InterviewSessionSnapshot } from '../../types/interview'
+import { Bug, FileCode2 } from 'lucide-react'
+import type { InterviewPhaseDocument, InterviewSessionSnapshot } from '../../types/interview'
 
 interface InterviewCodePanelProps {
   snapshot: InterviewSessionSnapshot
+  document: InterviewPhaseDocument
 }
 
-const InterviewCodePanel: React.FC<InterviewCodePanelProps> = ({ snapshot }) => {
-  const payload = snapshot.latestPayload
-  const codePanel = payload?.codePanel || mapSnapshotCode(snapshot)
-  const narration = codePanel?.narration || []
-  const mistakes = codePanel?.suspectedMistakes || snapshot.currentCode?.suspectedMistakes || []
-  const changes = payload?.changes || []
+const InterviewCodePanel: React.FC<InterviewCodePanelProps> = ({ snapshot, document }) => {
+  const codePanel = document.codePanel || mapSnapshotCode(snapshot)
 
   return (
-    <div className="pointer-events-auto flex min-h-[320px] flex-col overflow-hidden interview-card rounded-[28px] px-5 py-5 text-[#111827]">
+    <div className="interview-surface pointer-events-auto flex min-h-[280px] flex-col rounded-[10px] px-3 py-3">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.2em] text-[#64748b]">
-          <FileCode2 size={15} />
+        <div className="flex items-center gap-2 text-[12px] font-bold tracking-[0.01em] text-[#211c18]">
+          <FileCode2 size={14} />
           <span>Code</span>
         </div>
         {codePanel && (
-          <div className="flex items-center gap-2 text-[11px] text-[#475569]">
-            <span className="rounded-full border border-black/8 bg-white/50 px-2.5 py-1 font-semibold">{codePanel.language.toUpperCase()}</span>
-            <span className="rounded-full border border-black/8 bg-white/50 px-2.5 py-1 font-semibold">{codePanel.mode.toUpperCase()}</span>
+          <div className="flex items-center gap-2 text-[10px] font-semibold text-[#5f5146]">
+            <span className="rounded-[7px] border border-[#d0c6bd] bg-[rgba(255,252,248,0.6)] px-2 py-1">{codePanel.language.toUpperCase()}</span>
+            <span className="rounded-[7px] border border-[#d0c6bd] bg-[rgba(255,252,248,0.6)] px-2 py-1">{codePanel.mode.toUpperCase()}</span>
           </div>
         )}
       </div>
 
       {codePanel ? (
         <>
-          <div className="mt-4 min-h-0 flex-1 overflow-auto rounded-[22px] border border-black/8 bg-[#fffdfa]/92 p-3 font-mono text-[12px] leading-6 text-[#0f172a]">
+          <div className="mt-2 min-h-0 flex-1 overflow-auto rounded-[9px] border border-[#d7cdc4] bg-[rgba(255,253,250,0.72)] px-2 py-2 font-mono text-[11px] leading-[1.45] text-[#1f1a17]">
             {codePanel.content.split('\n').map((line, index) => (
-              <div key={`${index}-${line}`} className={`grid grid-cols-[28px_minmax(0,1fr)] gap-3 rounded-md px-2 ${lineClassName(codePanel, line)}`}>
-                <span className="select-none text-right text-[#94a3b8]">{index + 1}</span>
-                <span className="whitespace-pre-wrap break-words">{line || ' '}</span>
+              <div key={`${index}-${line}`} className={`grid grid-cols-[32px_minmax(0,1fr)] gap-2 px-1 py-[1px] ${lineClassName(codePanel.mode, line)}`}>
+                <span className="select-none text-right text-[10px] text-[#8b7e72]">{index + 1}</span>
+                <span className="whitespace-pre">{line || ' '}</span>
               </div>
             ))}
           </div>
 
-          {changes.length > 0 && (
-            <div className="mt-4 rounded-[20px] border border-black/8 bg-white/58 p-4">
-              <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.2em] text-[#64748b]">
-                <Braces size={14} />
-                <span>Change Summary</span>
-              </div>
-              <div className="mt-3 space-y-2">
-                {changes.slice(0, 4).map((item, index) => (
-                  <div key={`${item.label}-${index}`} className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2 text-[13px] leading-6 text-[#1f2937]">
-                    <span className="font-semibold text-[#0f172a]">{item.label}:</span> {item.detail}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {narration.length > 0 && (
-            <div className="mt-4 rounded-[20px] border border-black/8 bg-white/58 p-4">
-              <div className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[#64748b]">Say While Typing</div>
-              <div className="mt-3 space-y-2">
-                {narration.map((line, index) => (
-                  <div key={`${line}-${index}`} className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2 text-[13px] leading-6 text-[#1f2937]">
-                    {line}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {mistakes.length > 0 && (
-            <div className="mt-4 rounded-[20px] border border-[#fdba74] bg-[#fff7ed]/88 p-4">
-              <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.2em] text-[#9a3412]">
-                <Bug size={14} />
+          {codePanel.suspectedMistakes.length > 0 && (
+            <div className="mt-2 rounded-[9px] border border-[#d7c09e] bg-[rgba(250,241,229,0.8)] px-2.5 py-2">
+              <div className="flex items-center gap-2 text-[11px] font-bold text-[#69441f]">
+                <Bug size={12} />
                 <span>Likely Mistakes</span>
               </div>
-              <div className="mt-3 space-y-2">
-                {mistakes.slice(0, 4).map((line, index) => (
-                  <div key={`${line}-${index}`} className="rounded-[16px] border border-[#fdba74]/60 bg-white/70 px-3 py-2 text-[13px] leading-6 text-[#7c2d12]">
+              <div className="mt-1.5 space-y-1.5">
+                {codePanel.suspectedMistakes.map((line, index) => (
+                  <div key={`${line}-${index}`} className="text-[12px] leading-5 text-[#613d1d]">
                     {line}
                   </div>
                 ))}
@@ -85,15 +53,15 @@ const InterviewCodePanel: React.FC<InterviewCodePanelProps> = ({ snapshot }) => 
           )}
         </>
       ) : (
-        <div className="mt-4 flex flex-1 items-center justify-center rounded-[22px] border border-dashed border-black/12 bg-white/44 px-5 text-center text-[14px] leading-7 text-[#475569]">
-          The code panel will stay pinned here once the coding phase begins or a synced screenshot shows visible code.
+        <div className="mt-2 flex flex-1 items-center justify-center rounded-[9px] border border-dashed border-[#d0c6bd] bg-[rgba(255,252,248,0.55)] px-3 text-center text-[12px] leading-5 text-[#6c5f55]">
+          The code panel will stay here once coding begins or once `SYNC` captures visible code.
         </div>
       )}
     </div>
   )
 }
 
-function mapSnapshotCode(snapshot: InterviewSessionSnapshot): InterviewCodePanelData | null {
+function mapSnapshotCode(snapshot: InterviewSessionSnapshot): InterviewPhaseDocument['codePanel'] {
   if (!snapshot.currentCode) {
     return null
   }
@@ -107,8 +75,8 @@ function mapSnapshotCode(snapshot: InterviewSessionSnapshot): InterviewCodePanel
   }
 }
 
-function lineClassName(codePanel: InterviewCodePanelData, line: string): string {
-  if (codePanel.mode !== 'diff') {
+function lineClassName(mode: string, line: string): string {
+  if (mode !== 'diff') {
     return ''
   }
   if (line.startsWith('+')) {

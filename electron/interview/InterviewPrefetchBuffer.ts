@@ -1,9 +1,9 @@
-import { InterviewBufferEntry, InterviewOverlayPayload, InterviewPhase } from './types';
+import { InterviewBufferEntry, InterviewOverlayPayload, RenderableInterviewPhase } from './types';
 
 export class InterviewPrefetchBuffer {
-  private entries = new Map<InterviewPhase, InterviewBufferEntry>();
+  private entries = new Map<RenderableInterviewPhase, InterviewBufferEntry>();
 
-  public set(phase: InterviewPhase, inputRevision: number, payload: InterviewOverlayPayload): void {
+  public set(phase: RenderableInterviewPhase, inputRevision: number, payload: InterviewOverlayPayload): void {
     this.entries.set(phase, {
       phase,
       inputRevision,
@@ -12,14 +12,14 @@ export class InterviewPrefetchBuffer {
     });
   }
 
-  public get(phase: InterviewPhase, inputRevision: number): InterviewBufferEntry | null {
+  public get(phase: RenderableInterviewPhase, inputRevision: number): InterviewBufferEntry | null {
     const entry = this.entries.get(phase);
     if (!entry) return null;
     if (entry.inputRevision !== inputRevision) return null;
     return entry;
   }
 
-  public invalidatePhase(phase: InterviewPhase): void {
+  public invalidatePhase(phase: RenderableInterviewPhase): void {
     this.entries.delete(phase);
   }
 

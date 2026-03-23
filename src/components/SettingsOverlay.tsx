@@ -2657,7 +2657,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                 <h4 className="text-sm font-bold text-text-primary mb-3">{section.title}</h4>
                                                 {section.title === 'Interview' && (
                                                     <div className="mb-3 rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-xs leading-6 text-text-secondary">
-                                                        Interview shortcuts only apply during an active interview meeting. Leave / Resume Interview returns to the same interview overlay during that meeting without ending it.
+                                                        Interview shortcuts only apply during an active interview meeting. Phase stepping is optional, scroll stays enabled by default, and Leave / Resume Interview can stay unbound until you choose a kill-switch shortcut.
                                                     </div>
                                                 )}
                                                 <div className="space-y-1">

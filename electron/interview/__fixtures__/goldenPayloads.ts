@@ -59,8 +59,15 @@ export const GOLDEN_PHASE_PAYLOADS: Record<InterviewOverlayPayload['phase'], Int
     speakIfAsked: ['Then I would mention the duplicate case like three and three.'],
     quickQuestions: ['Edge case: duplicate values that form the answer'],
   }),
-  p6_close: createPayload('p6_close', 4, 6, {
-    speakNow: ['I can make that follow-up change, and the main impact would stay local to the lookup logic.'],
-    speakIfAsked: ['One question I would ask is what success looks like in the first few months of the role.'],
+  p6_follow_up: createPayload('p6_follow_up', 4, 6, {
+    speakNow: ['I can make that follow-up change, and it only affects the final return line.'],
+    speakIfAsked: ['The lookup logic stays the same because only the no-solution behavior changed.'],
+    codePanel: {
+      language: 'python',
+      mode: 'diff',
+      content: '@@\n-    return []\n+    return None',
+      narration: ['I am only changing the no-match return path, so the main loop stays untouched.'],
+      suspectedMistakes: [],
+    },
   }),
 };

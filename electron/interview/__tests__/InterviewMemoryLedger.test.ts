@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InterviewMemoryLedger } from '../InterviewMemoryLedger';
+import { InterviewMainDocComposer } from '../InterviewMainDocComposer';
+import { InterviewOverlayPayload } from '../types';
 
 test('manual override clear does not create a fresh input revision', () => {
   const ledger = new InterviewMemoryLedger();
@@ -37,10 +39,11 @@ test('control strip visibility can be toggled from the ledger', () => {
 
 test('pause and resume preserve interview state during an active meeting', () => {
   const ledger = new InterviewMemoryLedger();
+  const composer = new InterviewMainDocComposer();
   ledger.startSession('interview', { codingLanguage: 'python' });
   ledger.setProblemStatement('Two Sum', ['n can be large'], ['nums = [2,7,11,15], target = 9']);
   ledger.setMainScrollOffset(320);
-  ledger.applyGeneratedPayload({
+  const payload: InterviewOverlayPayload = {
     phase: 'p2_clarify',
     phaseConfidence: 0.9,
     manualOverrideActive: false,
@@ -58,7 +61,9 @@ test('pause and resume preserve interview state during an active meeting', () =>
     },
     generatedAt: Date.now(),
     inputRevision: ledger.getSnapshot().inputRevision,
-  });
+  };
+  const phaseDocument = composer.compose(ledger.getSnapshot(), payload);
+  ledger.applyGeneratedPayload(payload, phaseDocument);
 
   ledger.pauseInterviewMode();
   const paused = ledger.getSnapshot();

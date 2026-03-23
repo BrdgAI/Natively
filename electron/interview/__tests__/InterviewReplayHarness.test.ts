@@ -14,8 +14,8 @@ test('replay harness walks through interview phases in order', () => {
     'p4_code',
     'p4_code',
     'p5_test',
-    'p6_close',
+    'p6_follow_up',
   ]);
-  assert.equal(result.snapshot.phase, 'p6_close');
+  assert.equal(result.snapshot.phase, 'p6_follow_up');
   assert.equal(result.snapshot.sessionType, 'interview');
 });

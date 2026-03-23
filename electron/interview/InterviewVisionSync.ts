@@ -2,6 +2,8 @@ import { LLMHelper } from '../LLMHelper';
 import { buildVisionPrompt, INTERVIEW_VISION_SYSTEM_PROMPT } from './InterviewPrompts';
 import { InterviewPhase, InterviewScreenAnalysis, InterviewTranscriptSegment } from './types';
 
+type JsonObject = Record<string, unknown>;
+
 export class InterviewVisionSync {
   constructor(private readonly llmHelper: LLMHelper) {}
 
@@ -27,38 +29,56 @@ export class InterviewVisionSync {
       screenshotPreview,
       capturedAt: Date.now(),
       problemStatement: typeof parsed.problemStatement === 'string' ? parsed.problemStatement.trim() : undefined,
-      givenConstraints: normalizeStringArray(parsed.givenConstraints),
-      examples: normalizeStringArray(parsed.examples),
-      visibleQuestions: normalizeStringArray(parsed.visibleQuestions),
+      givenConstraints: normalizeStringArray(readArray(parsed, 'givenConstraints')),
+      examples: normalizeStringArray(readArray(parsed, 'examples')),
+      visibleQuestions: normalizeStringArray(readArray(parsed, 'visibleQuestions')),
       currentCode: typeof parsed.currentCode === 'string' ? parsed.currentCode : undefined,
       dryRunInput: typeof parsed.dryRunInput === 'string' ? parsed.dryRunInput : undefined,
-      hints: normalizeStringArray(parsed.hints),
-      likelyMistakes: normalizeStringArray(parsed.likelyMistakes),
-      extractedTests: normalizeStringArray(parsed.extractedTests),
+      hints: normalizeStringArray(readArray(parsed, 'hints')),
+      likelyMistakes: normalizeStringArray(readArray(parsed, 'likelyMistakes')),
+      extractedTests: normalizeStringArray(readArray(parsed, 'extractedTests')),
     };
   }
 }
 
-function parseJson(raw: string): any {
+function parseJson(raw: string): JsonObject {
+  const direct = safelyParseObject(raw);
+  if (direct) {
+    return direct;
+  }
+
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (match) {
+    const nested = safelyParseObject(match[0]);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return {};
+}
+
+function safelyParseObject(raw: string): JsonObject | null {
   try {
-    return JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
+    return isObject(parsed) ? parsed : null;
   } catch {
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) {
-      return {};
-    }
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return {};
-    }
+    return null;
   }
 }
 
-function normalizeStringArray(value: any): string[] {
-  if (!Array.isArray(value)) return [];
+function readArray(object: JsonObject, key: string): unknown[] {
+  const value = object[key];
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeStringArray(value: unknown[]): string[] {
   return value
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
-    .filter(Boolean)
-    .slice(0, 10);
+    .filter((item): item is string => Boolean(item))
+    .slice(0, 12);
+}
+
+function isObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

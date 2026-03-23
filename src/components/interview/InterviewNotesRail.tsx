@@ -1,71 +1,57 @@
 import React from 'react'
-import { BrainCircuit, HelpCircle, Pin, Waypoints } from 'lucide-react'
+import { BrainCircuit, Pin } from 'lucide-react'
 import type { InterviewSessionSnapshot } from '../../types/interview'
 
 interface InterviewNotesRailProps {
   snapshot: InterviewSessionSnapshot
-  mousePassthrough: boolean
 }
 
-const InterviewNotesRail: React.FC<InterviewNotesRailProps> = ({ snapshot, mousePassthrough }) => {
+const InterviewNotesRail: React.FC<InterviewNotesRailProps> = ({ snapshot }) => {
   const payload = snapshot.latestPayload
   const thoughtNotes = payload?.thoughtNotes.length ? payload.thoughtNotes : snapshot.thoughtNotes
   const pinnedFacts = payload?.pinnedFacts.length ? payload.pinnedFacts : snapshot.pinnedFacts
-  const quickQuestions = payload?.quickQuestions.length ? payload.quickQuestions : snapshot.quickQuestions
 
   return (
-    <div className="pointer-events-auto flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-[28px] interview-card px-5 py-5 text-[#111827]">
+    <div className="grid min-h-[180px] gap-3 xl:grid-cols-1">
       <RailSection
         title="Thought Notes"
-        icon={<BrainCircuit size={15} />}
+        icon={<BrainCircuit size={14} />}
         items={thoughtNotes}
-        empty="Silent prompts for what to think next will stay here."
+        empty="Short internal prompts for what to think next will stay here."
       />
       <RailSection
         title="Pinned Facts"
-        icon={<Pin size={15} />}
+        icon={<Pin size={14} />}
         items={pinnedFacts}
-        empty="Confirmed facts and constraints will pin here."
+        empty="Confirmed facts and constraints will stay pinned here."
       />
-      <RailSection
-        title="Quick Interrupts"
-        icon={<HelpCircle size={15} />}
-        items={quickQuestions}
-        empty="Fast interviewer questions and rescue lines will queue here."
-      />
-
-      <div className="rounded-[22px] border border-black/8 bg-white/52 p-4">
-        <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.2em] text-[#64748b]">
-          <Waypoints size={14} />
-          <span>Controls</span>
-        </div>
-        <div className="mt-3 space-y-2 text-[13px] leading-6 text-[#334155]">
-          <div className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2">`Cmd+Enter` moves to the next script chunk or reveals buffered backup lines.</div>
-          <div className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2">`Cmd+Shift+Enter` syncs the screen. Press it again right after sync to cycle phases.</div>
-          <div className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2">`Cmd+Shift+Up/Down` scrolls the main reading lane.</div>
-          <div className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2">`Cmd+Shift+Left/Right` steps phases manually, and `Cmd+Shift+I` leaves or resumes the same interview flow.</div>
-          <div className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2">
-            {mousePassthrough ? 'Click-through is on, so use shortcuts unless you toggle mouse passthrough off.' : 'Click-through is off, so you can use the on-screen interview controls.'}
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
 
-const RailSection = ({ title, icon, items, empty }: { title: string; icon: React.ReactNode; items: string[]; empty: string }) => (
-  <div className="min-h-0 rounded-[22px] border border-black/8 bg-white/52 p-4">
-    <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.2em] text-[#64748b]">
+const RailSection = ({
+  title,
+  icon,
+  items,
+  empty,
+}: {
+  title: string
+  icon: React.ReactNode
+  items: string[]
+  empty: string
+}) => (
+  <div className="interview-surface pointer-events-auto rounded-[10px] px-3 py-3">
+    <div className="flex items-center gap-2 text-[12px] font-bold tracking-[0.01em] text-[#211c18]">
       {icon}
       <span>{title}</span>
     </div>
-    <div className="mt-3 space-y-2">
+    <div className="mt-2 space-y-1.5">
       {items.length > 0 ? items.slice(0, 6).map((item, index) => (
-        <div key={`${title}-${index}-${item}`} className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2 text-[13px] leading-6 text-[#1f2937]">
+        <div key={`${title}-${index}-${item}`} className="rounded-[8px] border border-[#d7cdc4] bg-[rgba(255,253,250,0.68)] px-2.5 py-2 text-[12px] leading-5 text-[#2b241f]">
           {item}
         </div>
       )) : (
-        <div className="rounded-[16px] border border-dashed border-black/10 bg-white/35 px-3 py-3 text-[13px] leading-6 text-[#64748b]">
+        <div className="rounded-[8px] border border-dashed border-[#d0c6bd] bg-[rgba(255,252,248,0.55)] px-2.5 py-2 text-[12px] leading-5 text-[#6c5f55]">
           {empty}
         </div>
       )}

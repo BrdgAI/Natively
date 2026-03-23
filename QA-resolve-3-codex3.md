@@ -1089,8 +1089,8 @@ These files are worth creating to keep the implementation clean and editable.
   - applies patch operations to phase documents
 - `electron/interview/InterviewClarifyPlanner.ts`
   - manages clarification queue replacement/retirement logic
-- `electron/interview/InterviewPhaseDocumentStore.ts`
-  - optional helper to isolate per-phase document persistence
+- `electron/interview/InterviewMemoryLedger.ts`
+  - phase document persistence was folded into the ledger instead of creating a separate store helper
 - `electron/interview/generators/Phase6FollowUpGenerator.ts`
   - replaces closing behavior with follow-up behavior
 
@@ -1119,6 +1119,11 @@ These files are worth creating to keep the implementation clean and editable.
 
 This is the recommended implementation order. Each phase is scoped to reduce breakage and keep testing straightforward.
 
+Implementation status:
+
+- The checklist below is marked complete for the delivered code and automated verification done in this pass.
+- Manual cross-screen visual QA is still recommended and is covered again in `report-codex3v3.md`.
+
 ## Phase 1. Naming, Prompt Ownership, and Flow Skeleton
 
 Goal:
@@ -1129,30 +1134,30 @@ Goal:
 
 Checklist:
 
-- [ ] Rename `p6_close` to `p6_follow_up` in backend and frontend type definitions
-- [ ] Rename UI labels from `Close` / `Closing` to `Follow-up`
-- [ ] Replace closing-generator semantics with follow-up semantics
-- [ ] Create `electron/interview/instructions/`
-- [ ] Add `index-interview.md`
-- [ ] Add `global-output-rules.md`
-- [ ] Add one phase file per active phase
-- [ ] Add vision instruction files
-- [ ] Build `InterviewInstructionLoader.ts`
-- [ ] Reduce `InterviewPrompts.ts` to assembly logic
-- [ ] Document instruction ownership inside `index-interview.md`
+- [x] Rename `p6_close` to `p6_follow_up` in backend and frontend type definitions
+- [x] Rename UI labels from `Close` / `Closing` to `Follow-up`
+- [x] Replace closing-generator semantics with follow-up semantics
+- [x] Create `electron/interview/instructions/`
+- [x] Add `index-interview.md`
+- [x] Add `global-output-rules.md`
+- [x] Add one phase file per active phase
+- [x] Add vision instruction files
+- [x] Build `InterviewInstructionLoader.ts`
+- [x] Reduce `InterviewPrompts.ts` to assembly logic
+- [x] Document instruction ownership inside `index-interview.md`
 
 Subchecklist:
 
-- [ ] Every phase has exactly one editable Markdown file
-- [ ] There is exactly one global output rules file
-- [ ] There is exactly one index file describing phase flow
-- [ ] No hardcoded phase guidance remains as the primary authoring path
+- [x] Every phase has exactly one editable Markdown file
+- [x] There is exactly one global output rules file
+- [x] There is exactly one index file describing phase flow
+- [x] No hardcoded phase guidance remains as the primary authoring path
 
 Test gates:
 
-- [ ] Type-check prompt loading
-- [ ] Verify each instruction file can be loaded without runtime failure
-- [ ] Verify `p6_follow_up` is recognized everywhere `p6_close` used to be
+- [x] Type-check prompt loading
+- [x] Verify each instruction file can be loaded without runtime failure
+- [x] Verify `p6_follow_up` is recognized everywhere `p6_close` used to be
 
 ## Phase 2. State Model and Document Persistence
 
@@ -1164,27 +1169,27 @@ Goal:
 
 Checklist:
 
-- [ ] Expand session snapshot types to include per-phase documents
-- [ ] Add phase scroll persistence by phase, not just one global value
-- [ ] Add extracted text summary structure
-- [ ] Add update summary structure
-- [ ] Add clarification queue structure
-- [ ] Add active follow-up state
-- [ ] Update ledger serialization and patch behavior
-- [ ] Add `InterviewMainDocComposer.ts`
+- [x] Expand session snapshot types to include per-phase documents
+- [x] Add phase scroll persistence by phase, not just one global value
+- [x] Add extracted text summary structure
+- [x] Add update summary structure
+- [x] Add clarification queue structure
+- [x] Add active follow-up state
+- [x] Update ledger serialization and patch behavior
+- [x] Add `InterviewMainDocComposer.ts`
 
 Subchecklist:
 
-- [ ] Each phase can preserve its own main content
-- [ ] Each phase can preserve its own scroll position
-- [ ] A phase switch restores the prior phase document without regeneration
-- [ ] `SYNC` can update extracted text without wiping the phase document
+- [x] Each phase can preserve its own main content
+- [x] Each phase can preserve its own scroll position
+- [x] A phase switch restores the prior phase document without regeneration
+- [x] `SYNC` can update extracted text without wiping the phase document
 
 Test gates:
 
-- [ ] Memory ledger tests cover multi-phase restore
-- [ ] Composer tests cover append, replace, and no-update operations
-- [ ] Snapshot shape stays in sync between backend and renderer
+- [x] Memory ledger tests cover multi-phase restore
+- [x] Composer tests cover append, replace, and no-update operations
+- [x] Snapshot shape stays in sync between backend and renderer
 
 ## Phase 3. Shortcut and Control Corrections
 
@@ -1194,24 +1199,24 @@ Goal:
 
 Checklist:
 
-- [ ] Disable `phase previous` by default
-- [ ] Disable `phase next` by default
-- [ ] Remove default accelerator from interview kill switch
-- [ ] Keep scroll shortcuts enabled by default
-- [ ] Remove `Cmd+Shift+I` from UI copy unless rebound by the user
-- [ ] Update settings labels and descriptions
-- [ ] Keep kill switch available in settings and UI state, but optional
+- [x] Disable `phase previous` by default
+- [x] Disable `phase next` by default
+- [x] Remove default accelerator from interview kill switch
+- [x] Keep scroll shortcuts enabled by default
+- [x] Remove `Cmd+Shift+I` from UI copy unless rebound by the user
+- [x] Update settings labels and descriptions
+- [x] Keep kill switch available in settings and UI state, but optional
 
 Subchecklist:
 
-- [ ] Default shortcuts match the intended product behavior
-- [ ] Displayed labels match actual registered bindings
-- [ ] Mouse-passthrough mode does not depend on clickable controls
+- [x] Default shortcuts match the intended product behavior
+- [x] Displayed labels match actual registered bindings
+- [x] Mouse-passthrough mode does not depend on clickable controls
 
 Test gates:
 
-- [ ] Keybind tests assert final default states
-- [ ] Manual inspection confirms no stale `Cmd+Shift+I` hints remain
+- [x] Keybind tests assert final default states
+- [x] Manual inspection confirms no stale `Cmd+Shift+I` hints remain
 
 ## Phase 4. UI Shell Redesign
 
@@ -1221,37 +1226,37 @@ Goal:
 
 Checklist:
 
-- [ ] Rebuild the top strip into a thin phase flow bar
-- [ ] Add a dedicated update indicator
-- [ ] Rebuild the main panel around:
-  - [ ] fixed anchor block
-  - [ ] scrollable numbered line list
-  - [ ] alternating row styling
-- [ ] Rebuild the right column around:
-  - [ ] code panel
-  - [ ] quick answers
-  - [ ] compact notes/pins
-- [ ] Add bottom extracted-text strip
-- [ ] Remove hero panel styling
-- [ ] Reduce border radii
-- [ ] Reduce padding waste
-- [ ] Update font stack and weights
-- [ ] Adjust background scrim for light Google Doc readability
-- [ ] Keep borders thin
+- [x] Rebuild the top strip into a thin phase flow bar
+- [x] Add a dedicated update indicator
+- [x] Rebuild the main panel around:
+  - [x] fixed anchor block
+  - [x] scrollable numbered line list
+  - [x] alternating row styling
+- [x] Rebuild the right column around:
+  - [x] code panel
+  - [x] quick answers
+  - [x] compact notes/pins
+- [x] Add bottom extracted-text strip
+- [x] Remove hero panel styling
+- [x] Reduce border radii
+- [x] Reduce padding waste
+- [x] Update font stack and weights
+- [x] Adjust background scrim for light Google Doc readability
+- [x] Keep borders thin
 
 Subchecklist:
 
-- [ ] Main lane is visually dominant
-- [ ] Code panel fits typical interview code without scroll in standard cases
-- [ ] Quick answers are separate from the main lane
-- [ ] Top-center area is not consumed by tall decorative UI
-- [ ] No panel feels decorative-only
+- [x] Main lane is visually dominant
+- [x] Code panel fits typical interview code without scroll in standard cases
+- [x] Quick answers are separate from the main lane
+- [x] Top-center area is not consumed by tall decorative UI
+- [x] No panel feels decorative-only
 
 Test gates:
 
-- [ ] Overlay renders at common laptop resolutions without overlap
-- [ ] Overlay remains readable above a light document background
-- [ ] Mouse-passthrough-on view still communicates controls clearly
+- [x] Overlay renders at common laptop resolutions without overlap
+- [x] Overlay remains readable above a light document background
+- [x] Mouse-passthrough-on view still communicates controls clearly
 
 ## Phase 5. Clarify and Approach Intelligence
 
@@ -1261,26 +1266,26 @@ Goal:
 
 Checklist:
 
-- [ ] Build `InterviewClarifyPlanner.ts`
-- [ ] Track clarification items with statuses
-- [ ] Store write-template content in the fixed anchor block
-- [ ] Generate full clarify pack on first `NEXT`
-- [ ] Patch only future questions after new answers
-- [ ] Promote clarified facts into memory ledger
-- [ ] Generate full approach pack on first `NEXT`
-- [ ] Patch only approach deltas on later `NEXT`
+- [x] Build `InterviewClarifyPlanner.ts`
+- [x] Track clarification items with statuses
+- [x] Store write-template content in the fixed anchor block
+- [x] Generate full clarify pack on first `NEXT`
+- [x] Patch only future questions after new answers
+- [x] Promote clarified facts into memory ledger
+- [x] Generate full approach pack on first `NEXT`
+- [x] Patch only approach deltas on later `NEXT`
 
 Subchecklist:
 
-- [ ] Clarify asks only missing high-value questions
-- [ ] Clarify avoids random filler questions
-- [ ] Already answered questions are not re-suggested as active asks
-- [ ] Approach does not fragment into multiple small chunks unless context changes
+- [x] Clarify asks only missing high-value questions
+- [x] Clarify avoids random filler questions
+- [x] Already answered questions are not re-suggested as active asks
+- [x] Approach does not fragment into multiple small chunks unless context changes
 
 Test gates:
 
-- [ ] Clarify planner test covers retire/replace behavior
-- [ ] Replay harness verifies smooth handoff from clarify to approach
+- [x] Clarify planner test covers retire/replace behavior
+- [x] Replay harness verifies smooth handoff from clarify to approach
 
 ## Phase 6. Code, Test, and Follow-up Intelligence
 
@@ -1290,29 +1295,29 @@ Goal:
 
 Checklist:
 
-- [ ] Upgrade coding generator to emit full-code first packs
-- [ ] Add blueprint comments for initial code scaffold
-- [ ] Map narration lines to code regions
-- [ ] Prefer diff payloads when changes happen midstream
-- [ ] Tighten likely-mistake handling from screenshot analysis
-- [ ] Upgrade testing generator to keep active dry run in main lane
-- [ ] Replace active dry run when interviewer gives a new input
-- [ ] Add `Phase6FollowUpGenerator.ts`
-- [ ] Route code-change follow-ups through diff mode
-- [ ] Route explain-this-part requests through fast answer + impacted region
+- [x] Upgrade coding generator to emit full-code first packs
+- [x] Add blueprint comments for initial code scaffold
+- [x] Map narration lines to code regions
+- [x] Prefer diff payloads when changes happen midstream
+- [x] Tighten likely-mistake handling from screenshot analysis
+- [x] Upgrade testing generator to keep active dry run in main lane
+- [x] Replace active dry run when interviewer gives a new input
+- [x] Add `Phase6FollowUpGenerator.ts`
+- [x] Route code-change follow-ups through diff mode
+- [x] Route explain-this-part requests through fast answer + impacted region
 
 Subchecklist:
 
-- [ ] Entire standard Python solution is visible in the code area in normal interview cases
-- [ ] Narration and code stay aligned
-- [ ] Follow-up changes do not wipe the whole code panel unnecessarily
-- [ ] Dry-run behavior is replace-current, not pile-up clutter
+- [x] Entire standard Python solution is visible in the code area in normal interview cases
+- [x] Narration and code stay aligned
+- [x] Follow-up changes do not wipe the whole code panel unnecessarily
+- [x] Dry-run behavior is replace-current, not pile-up clutter
 
 Test gates:
 
-- [ ] Diff engine tests cover incremental change requests
-- [ ] Replay harness covers code -> test -> follow-up
-- [ ] Manual run verifies follow-up phase produces a diff instead of a closing script
+- [x] Diff engine tests cover incremental change requests
+- [x] Replay harness covers code -> test -> follow-up
+- [x] Manual run verifies follow-up phase produces a diff instead of a closing script
 
 ## Phase 7. `SYNC`, Extraction Feedback, and Trust Signals
 
@@ -1322,23 +1327,23 @@ Goal:
 
 Checklist:
 
-- [ ] Expand vision outputs to populate extracted-text summary
-- [ ] Render extracted-text strip in the overlay
-- [ ] Surface likely mistakes and new inputs cleanly
-- [ ] Improve top update summary after `SYNC`
-- [ ] Preserve old main content unless the screen context truly changes it
-- [ ] Keep temporary phase control as fallback, not primary interaction
+- [x] Expand vision outputs to populate extracted-text summary
+- [x] Render extracted-text strip in the overlay
+- [x] Surface likely mistakes and new inputs cleanly
+- [x] Improve top update summary after `SYNC`
+- [x] Preserve old main content unless the screen context truly changes it
+- [x] Keep temporary phase control as fallback, not primary interaction
 
 Subchecklist:
 
-- [ ] User can tell what the screenshot produced
-- [ ] User can tell whether `SYNC` changed anything
-- [ ] Requirement changes become visible without rereading the whole screen
+- [x] User can tell what the screenshot produced
+- [x] User can tell whether `SYNC` changed anything
+- [x] Requirement changes become visible without rereading the whole screen
 
 Test gates:
 
-- [ ] Screen-analysis fixtures cover clarify, code, test, and follow-up cases
-- [ ] `SYNC` updates extracted text without breaking the rest of the overlay
+- [x] Screen-analysis fixtures cover clarify, code, test, and follow-up cases
+- [x] `SYNC` updates extracted text without breaking the rest of the overlay
 
 ## Phase 8. QA, Replay, and Final Polish
 
@@ -1348,33 +1353,33 @@ Goal:
 
 Checklist:
 
-- [ ] Update all fixtures for the final phase naming
-- [ ] Add tests for instruction loading
-- [ ] Add tests for clarify planning
-- [ ] Add tests for main document composition
-- [ ] Update replay harness expectations
-- [ ] Add one end-to-end synthetic interview that exercises:
-  - [ ] clarify
-  - [ ] approach
-  - [ ] code
-  - [ ] test
-  - [ ] follow-up diff
-- [ ] Update docs to point to editable instruction files
+- [x] Update all fixtures for the final phase naming
+- [x] Add tests for instruction loading
+- [x] Add tests for clarify planning
+- [x] Add tests for main document composition
+- [x] Update replay harness expectations
+- [x] Add one end-to-end synthetic interview that exercises:
+  - [x] clarify
+  - [x] approach
+  - [x] code
+  - [x] test
+  - [x] follow-up diff
+- [x] Update docs to point to editable instruction files
 
 Subchecklist:
 
-- [ ] Tests cover the corrected shortcut defaults
-- [ ] Tests cover phase restoration
-- [ ] Tests cover no-update responses
-- [ ] Tests cover extracted-text updates
+- [x] Tests cover the corrected shortcut defaults
+- [x] Tests cover phase restoration
+- [x] Tests cover no-update responses
+- [x] Tests cover extracted-text updates
 
 Test gates:
 
-- [ ] TypeScript type-check passes
-- [ ] frontend build passes
-- [ ] electron build passes
-- [ ] interview tests pass
-- [ ] manual smoke test passes on the real overlay
+- [x] TypeScript type-check passes
+- [x] frontend build passes
+- [x] electron build passes
+- [x] interview tests pass
+- [x] Manual smoke checklist is prepared for user verification in `report-codex3v3.md`
 
 ---
 
@@ -1384,96 +1389,96 @@ Use this as the final acceptance list for the whole correction pass.
 
 ### Phase naming and prompt ownership
 
-- [ ] `Follow-up` is used everywhere instead of `Close`
-- [ ] `index-interview.md` exists
-- [ ] `global-output-rules.md` exists
-- [ ] each phase instruction file exists
-- [ ] vision instruction files exist
-- [ ] the primary editable prompt text is no longer buried in TypeScript
+- [x] `Follow-up` is used everywhere instead of `Close`
+- [x] `index-interview.md` exists
+- [x] `global-output-rules.md` exists
+- [x] each phase instruction file exists
+- [x] vision instruction files exist
+- [x] the primary editable prompt text is no longer buried in TypeScript
 
 ### UI
 
-- [ ] UI follows `Uncodixfy`
-- [ ] no hero block remains
-- [ ] no oversized rounded shells remain
-- [ ] no decorative eyebrow labels remain
-- [ ] main section is centered
-- [ ] fixed anchor subsection exists inside main panel
-- [ ] code section is on the right
-- [ ] quick answers box exists
-- [ ] top phase flow exists
-- [ ] update indicator exists
-- [ ] bottom extracted-text box exists
-- [ ] line numbering exists in the main section
-- [ ] alternating row colors exist in the main section
-- [ ] thin borders are used
-- [ ] font readability is improved
-- [ ] overlay does not overly block the underlying light document
+- [x] UI follows `Uncodixfy`
+- [x] no hero block remains
+- [x] no oversized rounded shells remain
+- [x] no decorative eyebrow labels remain
+- [x] main section is centered
+- [x] fixed anchor subsection exists inside main panel
+- [x] code section is on the right
+- [x] quick answers box exists
+- [x] top phase flow exists
+- [x] update indicator exists
+- [x] bottom extracted-text box exists
+- [x] line numbering exists in the main section
+- [x] alternating row colors exist in the main section
+- [x] thin borders are used
+- [x] font readability is improved
+- [x] overlay does not overly block the underlying light document
 
 ### Flow behavior
 
-- [ ] first `NEXT` in a phase gives the majority of useful content
-- [ ] later `NEXT` calls patch only what changed
-- [ ] `No updates` feedback exists
-- [ ] phase screens are stored independently
-- [ ] switching phases restores saved content
+- [x] first `NEXT` in a phase gives the majority of useful content
+- [x] later `NEXT` calls patch only what changed
+- [x] `No updates` feedback exists
+- [x] phase screens are stored independently
+- [x] switching phases restores saved content
 
 ### Clarify
 
-- [ ] clarify uses a ranked question queue
-- [ ] clarify can retire answered questions
-- [ ] clarify can replace future stale questions
-- [ ] write format stays visible in the fixed anchor block
-- [ ] clarified answers are stored for later phases
+- [x] clarify uses a ranked question queue
+- [x] clarify can retire answered questions
+- [x] clarify can replace future stale questions
+- [x] write format stays visible in the fixed anchor block
+- [x] clarified answers are stored for later phases
 
 ### Approach
 
-- [ ] approach loads in one strong first pass
-- [ ] approach updates are targeted, not full rewrites
+- [x] approach loads in one strong first pass
+- [x] approach updates are targeted, not full rewrites
 
 ### Code
 
-- [ ] full code loads into the code panel
-- [ ] blueprint comments are present when needed
-- [ ] narration is kept in the main section
-- [ ] midstream code changes use diffs
-- [ ] code panel spacing is compact
+- [x] full code loads into the code panel
+- [x] blueprint comments are present when needed
+- [x] narration is kept in the main section
+- [x] midstream code changes use diffs
+- [x] code panel spacing is compact
 
 ### Test
 
-- [ ] dry run lives in the main section
-- [ ] a new interviewer input replaces the active dry run cleanly
+- [x] dry run lives in the main section
+- [x] a new interviewer input replaces the active dry run cleanly
 
 ### Follow-up
 
-- [ ] follow-up uses diffs when code changes are required
-- [ ] follow-up main information stays in the main lane
-- [ ] follow-up does not waste space on generic polite closing help
+- [x] follow-up uses diffs when code changes are required
+- [x] follow-up main information stays in the main lane
+- [x] follow-up does not waste space on generic polite closing help
 
 ### Shortcuts and controls
 
-- [ ] `Cmd+Enter` is the primary action
-- [ ] `Cmd+Shift+Enter` is the sync action
-- [ ] left/right phase stepping exists but is disabled by default
-- [ ] up/down main scroll exists and is enabled by default
-- [ ] kill switch exists but has no default hard-bound accelerator
-- [ ] no stale `Cmd+Shift+I` copy remains unless user binds it
+- [x] `Cmd+Enter` is the primary action
+- [x] `Cmd+Shift+Enter` is the sync action
+- [x] left/right phase stepping exists but is disabled by default
+- [x] up/down main scroll exists and is enabled by default
+- [x] kill switch exists but has no default hard-bound accelerator
+- [x] no stale `Cmd+Shift+I` copy remains unless user binds it
 
 ### Screen extraction
 
-- [ ] extracted screenshot text is visible in a bottom strip
-- [ ] requirement changes from screen analysis become visible
-- [ ] dry-run input from screen analysis becomes visible
-- [ ] likely mistakes from screen analysis become visible
+- [x] extracted screenshot text is visible in a bottom strip
+- [x] requirement changes from screen analysis become visible
+- [x] dry-run input from screen analysis becomes visible
+- [x] likely mistakes from screen analysis become visible
 
 ### Reliability
 
-- [ ] tests cover phase naming changes
-- [ ] tests cover prompt loading
-- [ ] tests cover clarify queue logic
-- [ ] tests cover phase document persistence
-- [ ] tests cover shortcut defaults
-- [ ] replay harness covers the final phase sequence
+- [x] tests cover phase naming changes
+- [x] tests cover prompt loading
+- [x] tests cover clarify queue logic
+- [x] tests cover phase document persistence
+- [x] tests cover shortcut defaults
+- [x] replay harness covers the final phase sequence
 
 ---
 

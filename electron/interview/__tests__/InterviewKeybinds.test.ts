@@ -13,12 +13,12 @@ test('interview defaults include dedicated next, sync, phase, scroll, and leave/
   assert.equal(ids.get('general:capture-and-process')?.accelerator, 'CommandOrControl+Alt+Shift+Enter');
   assert.equal(ids.get('interview:next')?.accelerator, 'CommandOrControl+Enter');
   assert.equal(ids.get('interview:sync')?.accelerator, 'CommandOrControl+Shift+Enter');
-  assert.equal(ids.get('interview:phase-prev')?.enabled, true);
-  assert.equal(ids.get('interview:phase-next')?.enabled, true);
+  assert.equal(ids.get('interview:phase-prev')?.enabled, false);
+  assert.equal(ids.get('interview:phase-next')?.enabled, false);
   assert.equal(ids.get('interview:scroll-up')?.accelerator, 'CommandOrControl+Shift+Up');
   assert.equal(ids.get('interview:scroll-down')?.accelerator, 'CommandOrControl+Shift+Down');
-  assert.equal(ids.get('interview:exit-mode')?.accelerator, 'CommandOrControl+Shift+I');
-  assert.equal(ids.get('interview:exit-mode')?.enabled, true);
+  assert.equal(ids.get('interview:exit-mode')?.accelerator, '');
+  assert.equal(ids.get('interview:exit-mode')?.enabled, false);
 });
 
 test('legacy shortcut overrides migrate to the new interview and general defaults', () => {
@@ -36,10 +36,10 @@ test('legacy shortcut overrides migrate to the new interview and general default
   assert.equal(ids.get('general:capture-and-process')?.accelerator, 'CommandOrControl+Alt+Shift+Enter');
   assert.equal(ids.get('interview:next')?.accelerator, 'CommandOrControl+Enter');
   assert.equal(ids.get('interview:sync')?.accelerator, 'CommandOrControl+Shift+Enter');
-  assert.equal(ids.get('interview:phase-prev')?.enabled, true);
-  assert.equal(ids.get('interview:phase-next')?.enabled, true);
-  assert.equal(ids.get('interview:exit-mode')?.accelerator, 'CommandOrControl+Shift+I');
-  assert.equal(ids.get('interview:exit-mode')?.enabled, true);
+  assert.equal(ids.get('interview:phase-prev')?.enabled, false);
+  assert.equal(ids.get('interview:phase-next')?.enabled, false);
+  assert.equal(ids.get('interview:exit-mode')?.accelerator, '');
+  assert.equal(ids.get('interview:exit-mode')?.enabled, false);
 });
 
 test('duplicate validation blocks conflicting shortcuts and preserves allowed shared pairs', () => {

@@ -33,7 +33,7 @@ const INTERVIEW_PHASE_PREV_ACCELERATOR = 'CommandOrControl+Shift+Left';
 const INTERVIEW_PHASE_NEXT_ACCELERATOR = 'CommandOrControl+Shift+Right';
 const INTERVIEW_SCROLL_UP_ACCELERATOR = 'CommandOrControl+Shift+Up';
 const INTERVIEW_SCROLL_DOWN_ACCELERATOR = 'CommandOrControl+Shift+Down';
-const INTERVIEW_TOGGLE_ACCELERATOR = 'CommandOrControl+Shift+I';
+const INTERVIEW_TOGGLE_ACCELERATOR = '';
 
 const LEGACY_GENERAL_PROCESS_ACCELERATOR = 'CommandOrControl+Enter';
 const LEGACY_GENERAL_CAPTURE_ACCELERATOR = 'CommandOrControl+Shift+Enter';
@@ -57,11 +57,11 @@ export const DEFAULT_KEYBINDS: KeybindConfig[] = [
     // Interview
     { id: 'interview:next', label: 'Interview Next', accelerator: INTERVIEW_NEXT_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_NEXT_ACCELERATOR, enabled: true, defaultEnabled: true },
     { id: 'interview:sync', label: 'Interview Sync', accelerator: INTERVIEW_SYNC_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_SYNC_ACCELERATOR, enabled: true, defaultEnabled: true },
-    { id: 'interview:phase-prev', label: 'Interview Phase Previous', accelerator: INTERVIEW_PHASE_PREV_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_PHASE_PREV_ACCELERATOR, enabled: true, defaultEnabled: true },
-    { id: 'interview:phase-next', label: 'Interview Phase Next', accelerator: INTERVIEW_PHASE_NEXT_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_PHASE_NEXT_ACCELERATOR, enabled: true, defaultEnabled: true },
+    { id: 'interview:phase-prev', label: 'Interview Phase Previous', accelerator: INTERVIEW_PHASE_PREV_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_PHASE_PREV_ACCELERATOR, enabled: false, defaultEnabled: false },
+    { id: 'interview:phase-next', label: 'Interview Phase Next', accelerator: INTERVIEW_PHASE_NEXT_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_PHASE_NEXT_ACCELERATOR, enabled: false, defaultEnabled: false },
     { id: 'interview:scroll-up', label: 'Interview Scroll Up', accelerator: INTERVIEW_SCROLL_UP_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_SCROLL_UP_ACCELERATOR, enabled: true, defaultEnabled: true },
     { id: 'interview:scroll-down', label: 'Interview Scroll Down', accelerator: INTERVIEW_SCROLL_DOWN_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_SCROLL_DOWN_ACCELERATOR, enabled: true, defaultEnabled: true },
-    { id: 'interview:exit-mode', label: 'Leave / Resume Interview', accelerator: INTERVIEW_TOGGLE_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_TOGGLE_ACCELERATOR, enabled: true, defaultEnabled: true },
+    { id: 'interview:exit-mode', label: 'Leave / Resume Interview', accelerator: INTERVIEW_TOGGLE_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_TOGGLE_ACCELERATOR, enabled: false, defaultEnabled: false },
 
     // Chat - Global shortcuts (work even when app is not focused - stealth mode)
     { id: 'chat:whatToAnswer', label: 'What to Answer', accelerator: 'CommandOrControl+1', isGlobal: true, defaultAccelerator: 'CommandOrControl+1', enabled: true, defaultEnabled: true },
@@ -479,21 +479,21 @@ function migrateInterviewDefaults(byId: Map<string, KeybindConfig>): boolean {
     let didMigrate = false;
 
     const phasePrev = byId.get('interview:phase-prev');
-    if (phasePrev && normalizeAccelerator(phasePrev.accelerator) === normalizeAccelerator(INTERVIEW_PHASE_PREV_ACCELERATOR) && phasePrev.enabled === false) {
-        phasePrev.enabled = true;
+    if (phasePrev && phasePrev.defaultEnabled !== false && normalizeAccelerator(phasePrev.accelerator) === normalizeAccelerator(INTERVIEW_PHASE_PREV_ACCELERATOR) && phasePrev.enabled === true) {
+        phasePrev.enabled = false;
         didMigrate = true;
     }
 
     const phaseNext = byId.get('interview:phase-next');
-    if (phaseNext && normalizeAccelerator(phaseNext.accelerator) === normalizeAccelerator(INTERVIEW_PHASE_NEXT_ACCELERATOR) && phaseNext.enabled === false) {
-        phaseNext.enabled = true;
+    if (phaseNext && phaseNext.defaultEnabled !== false && normalizeAccelerator(phaseNext.accelerator) === normalizeAccelerator(INTERVIEW_PHASE_NEXT_ACCELERATOR) && phaseNext.enabled === true) {
+        phaseNext.enabled = false;
         didMigrate = true;
     }
 
     const toggle = byId.get('interview:exit-mode');
-    if (toggle && normalizeAccelerator(toggle.accelerator) === normalizeAccelerator(LEGACY_INTERVIEW_TOGGLE_ACCELERATOR) && toggle.enabled === false) {
+    if (toggle && (toggle.accelerator || toggle.enabled)) {
         toggle.accelerator = INTERVIEW_TOGGLE_ACCELERATOR;
-        toggle.enabled = true;
+        toggle.enabled = false;
         didMigrate = true;
     }
 

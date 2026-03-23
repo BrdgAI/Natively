@@ -1,7 +1,9 @@
 import { EventEmitter } from 'events';
 import type { AppState } from '../main';
 import { LLMHelper } from '../LLMHelper';
+import { InterviewClarifyPlanner } from './InterviewClarifyPlanner';
 import { InterviewDiffEngine, InterviewDiffResult } from './InterviewDiffEngine';
+import { InterviewMainDocComposer } from './InterviewMainDocComposer';
 import { InterviewMemoryLedger } from './InterviewMemoryLedger';
 import { InterviewPhaseRouter } from './InterviewPhaseRouter';
 import { InterviewPrefetchBuffer } from './InterviewPrefetchBuffer';
@@ -10,9 +12,10 @@ import { Phase2ClarificationGenerator } from './generators/Phase2ClarificationGe
 import { Phase3ApproachGenerator } from './generators/Phase3ApproachGenerator';
 import { Phase4CodingGenerator } from './generators/Phase4CodingGenerator';
 import { Phase5TestingGenerator } from './generators/Phase5TestingGenerator';
-import { Phase6ClosingGenerator } from './generators/Phase6ClosingGenerator';
+import { Phase6FollowUpGenerator } from './generators/Phase6FollowUpGenerator';
 import {
   InterviewBufferEntry,
+  InterviewClarificationCandidate,
   InterviewGeneratorContext,
   InterviewModeConfig,
   InterviewOverlayPayload,
@@ -20,10 +23,15 @@ import {
   InterviewScreenAnalysis,
   InterviewSessionSnapshot,
   InterviewTranscriptSegment,
+  RenderableInterviewPhase,
   SessionType,
 } from './types';
 
-type GeneratorMap = Record<'p2_clarify' | 'p3_approach' | 'p4_code' | 'p5_test' | 'p6_close', { generate: (context: InterviewGeneratorContext) => Promise<InterviewOverlayPayload> }>;
+type GeneratorMap = Record<
+  RenderableInterviewPhase,
+  { generate: (context: InterviewGeneratorContext) => Promise<InterviewOverlayPayload> }
+>;
+
 const CONTROL_STRIP_DURATION_MS = 2200;
 
 export class InterviewOrchestrator extends EventEmitter {
@@ -32,6 +40,8 @@ export class InterviewOrchestrator extends EventEmitter {
   private readonly buffer = new InterviewPrefetchBuffer();
   private readonly visionSync: InterviewVisionSync;
   private readonly diffEngine = new InterviewDiffEngine();
+  private readonly clarifyPlanner = new InterviewClarifyPlanner();
+  private readonly documentComposer = new InterviewMainDocComposer();
   private readonly generators: GeneratorMap;
 
   private prefetchTimer: NodeJS.Timeout | null = null;
@@ -48,7 +58,7 @@ export class InterviewOrchestrator extends EventEmitter {
       p3_approach: new Phase3ApproachGenerator(llmHelper),
       p4_code: new Phase4CodingGenerator(llmHelper),
       p5_test: new Phase5TestingGenerator(llmHelper),
-      p6_close: new Phase6ClosingGenerator(llmHelper),
+      p6_follow_up: new Phase6FollowUpGenerator(llmHelper),
     };
 
     this.ledger.on('state-updated', (snapshot: InterviewSessionSnapshot) => {
@@ -131,7 +141,7 @@ export class InterviewOrchestrator extends EventEmitter {
       return snapshot;
     }
 
-    const currentPhase = normalizePhase(snapshot.phase);
+    const currentPhase = normalizePhase(snapshot.manualOverridePhase || snapshot.phase);
     const buffered = this.buffer.get(currentPhase, snapshot.inputRevision);
 
     if (buffered) {
@@ -147,7 +157,10 @@ export class InterviewOrchestrator extends EventEmitter {
     this.ledger.setGenerating(true, 'Preparing the next script...');
     const payload = await this.generatePayload(currentPhase);
     this.buffer.set(currentPhase, snapshot.inputRevision, payload);
-    this.publishBufferedPayload(this.buffer.get(currentPhase, snapshot.inputRevision)!);
+    const entry = this.buffer.get(currentPhase, snapshot.inputRevision);
+    if (entry) {
+      this.publishBufferedPayload(entry);
+    }
     return this.ledger.getSnapshot();
   }
 
@@ -177,8 +190,8 @@ export class InterviewOrchestrator extends EventEmitter {
       this.ledger.showControlStrip(buildControlStripHint(this.ledger.getSnapshot()), CONTROL_STRIP_DURATION_MS);
       this.ledger.setSyncing(false, 'Screen synced');
       return this.ledger.getSnapshot();
-    } catch (error: any) {
-      this.ledger.setSyncing(false, `Screen sync failed: ${error.message || 'unknown error'}`);
+    } catch (error) {
+      this.ledger.setSyncing(false, `Screen sync failed: ${toErrorMessage(error)}`);
       return this.ledger.getSnapshot();
     }
   }
@@ -224,7 +237,7 @@ export class InterviewOrchestrator extends EventEmitter {
     this.ledger.setPhase(phaseResult.phase, phaseResult.confidence);
   }
 
-  private schedulePrefetch(reason: string): void {
+  private schedulePrefetch(reason: 'start' | 'resume' | 'transcript' | 'sync' | 'manual-phase'): void {
     const snapshot = this.ledger.getSnapshot();
     if (!snapshot.active || snapshot.sessionType !== 'interview') {
       return;
@@ -235,19 +248,23 @@ export class InterviewOrchestrator extends EventEmitter {
     }
 
     this.prefetchTimer = setTimeout(async () => {
-      if (this.prefetchInFlight) return;
+      if (this.prefetchInFlight) {
+        return;
+      }
+
       this.prefetchInFlight = true;
       try {
         const current = this.ledger.getSnapshot();
-        const phase = normalizePhase(current.phase);
+        const phase = normalizePhase(current.manualOverridePhase || current.phase);
         if (this.buffer.get(phase, current.inputRevision)) {
           return;
         }
+
         const payload = await this.generatePayload(phase);
         this.buffer.set(phase, current.inputRevision, payload);
         this.ledger.setStatusMessage(reason === 'start' ? 'Interview mode ready' : 'Next script prefetched');
-      } catch (error: any) {
-        this.ledger.setStatusMessage(`Prefetch failed: ${error.message || 'unknown error'}`);
+      } catch (error) {
+        this.ledger.setStatusMessage(`Prefetch failed: ${toErrorMessage(error)}`);
       } finally {
         this.prefetchInFlight = false;
       }
@@ -261,7 +278,7 @@ export class InterviewOrchestrator extends EventEmitter {
     }
   }
 
-  private async generatePayload(phase: Exclude<InterviewPhase, 'p1_intro'>): Promise<InterviewOverlayPayload> {
+  private async generatePayload(phase: RenderableInterviewPhase): Promise<InterviewOverlayPayload> {
     const snapshot = this.ledger.getSnapshot();
     const context: InterviewGeneratorContext = {
       snapshot,
@@ -272,7 +289,7 @@ export class InterviewOrchestrator extends EventEmitter {
 
     const payload = await this.generators[phase].generate(context);
 
-    if (this.lastDiffResult && phase === 'p4_code' && payload.codePanel) {
+    if (this.lastDiffResult && payload.codePanel && (phase === 'p4_code' || phase === 'p6_follow_up')) {
       payload.codePanel.mode = 'diff';
       payload.codePanel.content = this.lastDiffResult.diffText || payload.codePanel.content;
       payload.changes = [
@@ -283,6 +300,12 @@ export class InterviewOrchestrator extends EventEmitter {
           severity: 'updated' as const,
         })),
       ];
+      payload.updateSummary = {
+        status: 'updated',
+        updatedSections: ['Main', 'Code'],
+        message: 'Updated: Main, Code',
+        at: payload.generatedAt,
+      };
     }
 
     if (payload.speakNow.length === 0) {
@@ -293,12 +316,13 @@ export class InterviewOrchestrator extends EventEmitter {
       payload.pinnedFacts = compactFacts(snapshot);
     }
 
-    if (phase === 'p3_approach' && payload.speakNow.length > 0) {
-      this.ledger.setApproachSummary(payload.speakNow.slice(0, 4));
-    }
-
-    if (phase === 'p2_clarify' && snapshot.problemStatement === '' && payload.writeNow.length > 0) {
-      this.ledger.setOpenQuestions(payload.quickQuestions);
+    if (!payload.updateSummary) {
+      payload.updateSummary = {
+        status: 'updated',
+        updatedSections: payload.codePanel?.content ? ['Main', 'Code'] : ['Main'],
+        message: payload.codePanel?.content ? 'Updated: Main, Code' : 'Updated: Main',
+        at: payload.generatedAt,
+      };
     }
 
     return payload;
@@ -306,21 +330,58 @@ export class InterviewOrchestrator extends EventEmitter {
 
   private publishBufferedPayload(entry: InterviewBufferEntry): void {
     this.lastAdvanceCount = 0;
-    if (this.ledger.getSnapshot().manualOverridePhase) {
-      this.ledger.clearManualOverridePhase();
-    }
-    this.ledger.applyGeneratedPayload(entry.payload);
+
+    const snapshot = this.ledger.getSnapshot();
+    const clarificationItems = entry.phase === 'p2_clarify'
+      ? this.clarifyPlanner.plan(
+          snapshot,
+          buildClarificationCandidates(entry.payload),
+          this.ledger.getRecentTranscript()
+        )
+      : undefined;
+    const composedSnapshot = clarificationItems
+      ? {
+          ...snapshot,
+          clarificationItems,
+          openQuestions: clarificationItems
+            .filter((item) => item.status === 'pending' || item.status === 'asked')
+            .map((item) => item.text),
+        }
+      : snapshot;
+    const phaseDocument = this.documentComposer.compose(composedSnapshot, entry.payload);
+
+    this.ledger.applyGeneratedPayload(entry.payload, phaseDocument, clarificationItems);
   }
 
   private advancePublishedPayload(): void {
     const snapshot = this.ledger.getSnapshot();
     const payload = snapshot.latestPayload;
-    if (!payload) return;
+    if (!payload) {
+      return;
+    }
 
     const nextAdvanceCount = this.lastAdvanceCount + 1;
     const promoted = payload.speakIfAsked.slice(0, nextAdvanceCount);
     if (promoted.length === 0) {
-      this.ledger.setStatusMessage('No new context yet. Current script is still the freshest.');
+      const phaseDocument = this.documentComposer.withNoUpdate(
+        snapshot.phaseDocuments[payload.phase],
+        'No updates'
+      );
+      const derived: InterviewOverlayPayload = {
+        ...payload,
+        updateSummary: {
+          status: 'unchanged',
+          updatedSections: [],
+          message: 'No updates',
+          at: Date.now(),
+        },
+        generatedAt: Date.now(),
+        freshness: {
+          ...payload.freshness,
+          generatedMsAgo: 0,
+        },
+      };
+      this.ledger.applyGeneratedPayload(derived, phaseDocument);
       return;
     }
 
@@ -336,6 +397,12 @@ export class InterviewOrchestrator extends EventEmitter {
           severity: 'updated',
         },
       ],
+      updateSummary: {
+        status: 'updated',
+        updatedSections: ['Main'],
+        message: 'Updated: Main',
+        at: Date.now(),
+      },
       generatedAt: Date.now(),
       freshness: {
         ...payload.freshness,
@@ -343,15 +410,27 @@ export class InterviewOrchestrator extends EventEmitter {
       },
     };
 
-    this.ledger.applyGeneratedPayload(derived);
+    const phaseDocument = this.documentComposer.compose(snapshot, derived);
+    this.ledger.applyGeneratedPayload(derived, phaseDocument);
   }
 }
 
-function normalizePhase(phase: InterviewPhase): Exclude<InterviewPhase, 'p1_intro'> {
+function normalizePhase(phase: InterviewPhase): RenderableInterviewPhase {
   return phase === 'p1_intro' ? 'p2_clarify' : phase;
 }
 
-function fallbackSpeakNow(phase: InterviewPhase, snapshot: InterviewSessionSnapshot): string[] {
+function buildClarificationCandidates(payload: InterviewOverlayPayload): InterviewClarificationCandidate[] {
+  if (payload.clarificationQuestions && payload.clarificationQuestions.length > 0) {
+    return payload.clarificationQuestions;
+  }
+
+  return payload.quickQuestions.map((text) => ({
+    text,
+    why: '',
+  }));
+}
+
+function fallbackSpeakNow(phase: RenderableInterviewPhase, snapshot: InterviewSessionSnapshot): string[] {
   switch (phase) {
     case 'p2_clarify':
       return [
@@ -372,12 +451,10 @@ function fallbackSpeakNow(phase: InterviewPhase, snapshot: InterviewSessionSnaps
       return [
         'Let me dry run this with a concrete example and then cover edge cases and complexity.',
       ];
-    case 'p6_close':
+    case 'p6_follow_up':
       return [
         'I can make that change, and then I will quickly summarize the impact.',
       ];
-    default:
-      return ['I am going to move one step at a time and keep the explanation clear.'];
   }
 }
 
@@ -391,16 +468,30 @@ function compactFacts(snapshot: InterviewSessionSnapshot): string[] {
 }
 
 function dedupe(items: string[]): string[] {
-  return Array.from(new Set(items.filter(Boolean)));
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of items) {
+    const normalized = item.trim();
+    if (!normalized) {
+      continue;
+    }
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(normalized);
+  }
+  return result;
 }
 
 function isControlStripVisible(snapshot: InterviewSessionSnapshot): boolean {
-  return !!snapshot.controlStripVisibleUntil && snapshot.controlStripVisibleUntil > Date.now();
+  return Boolean(snapshot.controlStripVisibleUntil && snapshot.controlStripVisibleUntil > Date.now());
 }
 
 function buildControlStripHint(snapshot: InterviewSessionSnapshot): string {
   const activePhase = snapshot.manualOverridePhase || snapshot.phase;
-  return `SYNC again to cycle phase. Current target: ${formatPhase(activePhase)}.`;
+  return `Sync again to cycle phase. Current target: ${formatPhase(activePhase)}.`;
 }
 
 function formatPhase(phase: InterviewPhase): string {
@@ -413,9 +504,16 @@ function formatPhase(phase: InterviewPhase): string {
       return 'Code';
     case 'p5_test':
       return 'Test';
-    case 'p6_close':
-      return 'Close';
+    case 'p6_follow_up':
+      return 'Follow-up';
     default:
       return 'Clarify';
   }
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return 'unknown error';
 }

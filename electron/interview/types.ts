@@ -6,7 +6,9 @@ export type InterviewPhase =
   | 'p3_approach'
   | 'p4_code'
   | 'p5_test'
-  | 'p6_close';
+  | 'p6_follow_up';
+
+export type RenderableInterviewPhase = Exclude<InterviewPhase, 'p1_intro'>;
 
 export type InterviewCodePanelMode =
   | 'skeleton'
@@ -16,6 +18,17 @@ export type InterviewCodePanelMode =
   | 'debug';
 
 export type InterviewChangeSeverity = 'new' | 'updated' | 'warning';
+
+export type InterviewUpdateStatus = 'updated' | 'unchanged' | 'partial';
+
+export type InterviewMainSectionTone = 'primary' | 'secondary' | 'warning';
+
+export type InterviewClarificationStatus =
+  | 'pending'
+  | 'asked'
+  | 'answered'
+  | 'retired'
+  | 'replaced';
 
 export interface InterviewChangeItem {
   label: string;
@@ -28,11 +41,81 @@ export interface InterviewCodePanel {
   mode: InterviewCodePanelMode;
   content: string;
   narration: string[];
-  suspectedMistakes?: string[];
+  suspectedMistakes: string[];
 }
 
+export interface InterviewAnchorBlock {
+  title: string;
+  items: string[];
+  writeNow: string[];
+  note: string | null;
+}
+
+export interface InterviewMainSection {
+  id: string;
+  title: string;
+  lines: string[];
+  tone: InterviewMainSectionTone;
+}
+
+export interface InterviewQuickAnswerItem {
+  id: string;
+  line: string;
+}
+
+export interface InterviewUpdateSummary {
+  status: InterviewUpdateStatus;
+  updatedSections: string[];
+  message: string;
+  at: number;
+}
+
+export interface InterviewExtractedTextSummary {
+  problemText: string;
+  requirementDelta: string[];
+  dryRunInput: string;
+  codeObservations: string[];
+  capturedAt: number | null;
+}
+
+export interface InterviewClarificationCandidate {
+  text: string;
+  why: string;
+}
+
+export interface InterviewClarificationItem {
+  id: string;
+  text: string;
+  why: string;
+  status: InterviewClarificationStatus;
+  answer: string;
+  revision: number;
+  replacementReason: string;
+}
+
+export interface InterviewFollowUpState {
+  request: string;
+  impactedArea: string;
+  diffRequired: boolean;
+  derivedFrom: 'transcript' | 'screen' | 'manual';
+}
+
+export interface InterviewPhaseDocument {
+  phase: RenderableInterviewPhase;
+  anchor: InterviewAnchorBlock;
+  mainSections: InterviewMainSection[];
+  quickAnswers: InterviewQuickAnswerItem[];
+  codePanel: InterviewCodePanel | null;
+  extractedText: InterviewExtractedTextSummary;
+  updateSummary: InterviewUpdateSummary;
+  scrollOffset: number;
+  lastUpdatedAt: number | null;
+}
+
+export type InterviewPhaseDocumentMap = Record<RenderableInterviewPhase, InterviewPhaseDocument>;
+
 export interface InterviewOverlayPayload {
-  phase: Exclude<InterviewPhase, 'p1_intro'>;
+  phase: RenderableInterviewPhase;
   phaseConfidence: number;
   manualOverrideActive: boolean;
   speakNow: string[];
@@ -43,6 +126,10 @@ export interface InterviewOverlayPayload {
   codePanel?: InterviewCodePanel;
   pinnedFacts: string[];
   changes: InterviewChangeItem[];
+  anchor?: InterviewAnchorBlock;
+  mainSections?: InterviewMainSection[];
+  clarificationQuestions?: InterviewClarificationCandidate[];
+  updateSummary?: InterviewUpdateSummary;
   freshness: {
     transcriptUpdatedMsAgo: number;
     screenshotUpdatedMsAgo: number | null;
@@ -85,7 +172,7 @@ export interface InterviewScreenAnalysis {
 }
 
 export interface InterviewBufferEntry {
-  phase: InterviewPhase;
+  phase: RenderableInterviewPhase;
   inputRevision: number;
   payload: InterviewOverlayPayload;
   createdAt: number;
@@ -108,6 +195,7 @@ export interface InterviewSessionSnapshot {
   problemStatement: string;
   clarifiedFacts: string[];
   openQuestions: string[];
+  clarificationItems: InterviewClarificationItem[];
   constraints: string[];
   examples: string[];
   approachSummary: string[];
@@ -115,6 +203,8 @@ export interface InterviewSessionSnapshot {
   thoughtNotes: string[];
   quickQuestions: string[];
   requirementChanges: string[];
+  activeFollowUp: InterviewFollowUpState | null;
+  phaseDocuments: InterviewPhaseDocumentMap;
   lastTranscriptAt: number | null;
   lastScreenshotAt: number | null;
   lastTranscriptSnippet: string;
