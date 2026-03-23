@@ -9,6 +9,11 @@ export interface ShortcutConfig {
     answer: string[];
     scrollUp: string[];
     scrollDown: string[];
+    interviewPhasePrev: string[];
+    interviewPhaseNext: string[];
+    interviewScrollUp: string[];
+    interviewScrollDown: string[];
+    interviewExitMode: string[];
     moveWindowUp: string[];
     moveWindowDown: string[];
     moveWindowLeft: string[];
@@ -43,6 +48,11 @@ const BACKEND_ID_BY_ACTION: Record<ShortcutActionId, string> = {
     answer: 'chat:answer',
     scrollUp: 'chat:scrollUp',
     scrollDown: 'chat:scrollDown',
+    interviewPhasePrev: 'interview:phase-prev',
+    interviewPhaseNext: 'interview:phase-next',
+    interviewScrollUp: 'interview:scroll-up',
+    interviewScrollDown: 'interview:scroll-down',
+    interviewExitMode: 'interview:exit-mode',
     moveWindowUp: 'window:move-up',
     moveWindowDown: 'window:move-down',
     moveWindowLeft: 'window:move-left',
@@ -68,6 +78,11 @@ export const DEFAULT_SHORTCUTS: ShortcutConfig = {
     answer: ['⌘', '5'],
     scrollUp: ['⌘', '↑'],
     scrollDown: ['⌘', '↓'],
+    interviewPhasePrev: ['⌘', '⇧', '←'],
+    interviewPhaseNext: ['⌘', '⇧', '→'],
+    interviewScrollUp: ['⌘', '⇧', '↑'],
+    interviewScrollDown: ['⌘', '⇧', '↓'],
+    interviewExitMode: [],
     moveWindowUp: ['⌘', '↑'],
     moveWindowDown: ['⌘', '↓'],
     moveWindowLeft: ['⌘', '←'],
@@ -89,6 +104,11 @@ export const DEFAULT_SHORTCUT_ENABLED: ShortcutEnabledConfig = {
     answer: true,
     scrollUp: true,
     scrollDown: true,
+    interviewPhasePrev: false,
+    interviewPhaseNext: false,
+    interviewScrollUp: true,
+    interviewScrollDown: true,
+    interviewExitMode: false,
     moveWindowUp: true,
     moveWindowDown: true,
     moveWindowLeft: true,

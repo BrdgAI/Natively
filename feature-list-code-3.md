@@ -438,6 +438,8 @@ What the user sees:
 
 ## Feature 1 - Interview Mode Shell And Safe Presets
 
+Status: Completed
+
 ### Objective
 
 Create a dedicated interview session type that swaps the app into interview-specific behavior from the moment the meeting starts.
@@ -490,6 +492,8 @@ Very high.
 ---
 
 ## Feature 2 - Structured Interview Memory Ledger
+
+Status: Completed
 
 ### Objective
 
@@ -557,6 +561,8 @@ High.
 
 ## Feature 3 - Phase Router And Event Extractor
 
+Status: Completed
+
 ### Objective
 
 Determine where the interview is right now without paying frontier-model latency on every transcript chunk.
@@ -621,6 +627,8 @@ High.
 
 ## Feature 4 - Interview Orchestrator, Prefetch Buffer, And `NEXT` / `SYNC` Semantics
 
+Status: Completed
+
 ### Objective
 
 Make the keyboard flow feel instant, stable, and predictable.
@@ -684,6 +692,8 @@ High.
 ---
 
 ## Feature 5 - Vision Sync, Code Extraction, And Diff Engine
+
+Status: Completed
 
 ### Objective
 
@@ -752,6 +762,8 @@ Both are manageable with freshness indicators and explicit `SYNC`.
 
 ## Feature 6 - Phase 2 Clarification Engine
 
+Status: Completed
+
 ### Objective
 
 Help the user sound structured during the most skipped and most important phase.
@@ -792,6 +804,8 @@ Very high.
 
 ## Feature 7 - Phase 3 Approach Pack Generator
 
+Status: Completed
+
 ### Objective
 
 Give the user a complete natural narration path from brute force to chosen solution.
@@ -824,6 +838,8 @@ Very high.
 ---
 
 ## Feature 8 - Phase 4 Coding Narrator And Change Copilot
+
+Status: Completed
 
 ### Objective
 
@@ -871,6 +887,8 @@ Main risk is screenshot quality during live coding, not basic architecture.
 
 ## Feature 9 - Phase 5 And 6 Testing, Complexity, Follow-up Change, And Closing Engine
 
+Status: Completed
+
 ### Objective
 
 Complete the second half of the interview so the user is not abandoned after the first draft of the code.
@@ -901,6 +919,8 @@ High.
 ---
 
 ## Feature 10 - Dedicated Interview Overlay UI
+
+Status: Completed
 
 ### Objective
 
@@ -977,6 +997,8 @@ High.
 
 ## Feature 11 - Reliability, Latency, Replay Harness, And Release Guardrails
 
+Status: Completed
+
 ### Objective
 
 Ship with confidence instead of assuming live interviews are the test environment.
@@ -1025,9 +1047,13 @@ This is the simplest sane way to build it.
 
 ### Pass 1 - Put the app into interview mode
 
+Status: Completed
+
 Add the mode toggle, add the kill switch, and make the overlay full-screen with the 2 primary interview shortcuts plus the optional advanced navigation bindings.
 
 ### Pass 2 - Teach the app what the interview currently knows
+
+Status: Completed
 
 Build the memory ledger so the app can remember:
 
@@ -1039,6 +1065,8 @@ Build the memory ledger so the app can remember:
 
 ### Pass 3 - Make the shortcuts smart
 
+Status: Completed
+
 Implement `NEXT` and `SYNC` so:
 
 - `NEXT` is fast and repeatable
@@ -1047,6 +1075,8 @@ Implement `NEXT` and `SYNC` so:
 - main-panel scroll shortcuts work reliably
 
 ### Pass 4 - Build the generators in interview order
+
+Status: Completed
 
 Start with:
 
@@ -1059,6 +1089,8 @@ This gives usable value early and keeps the project shippable even if later poli
 
 ### Pass 5 - Replace the overlay UI
 
+Status: Completed
+
 Move from a chat panel to a stable interview layout with:
 
 - speak now
@@ -1068,6 +1100,8 @@ Move from a chat panel to a stable interview layout with:
 - quick questions
 
 ### Pass 6 - Harden it
+
+Status: Completed
 
 Run replay tests against the mock interview scripts and screenshot fixtures until the output feels stable and predictable.
 

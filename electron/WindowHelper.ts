@@ -105,6 +105,12 @@ export class WindowHelper {
   }
 
   private getOverlayBoundsForShow(): Electron.Rectangle {
+    if (this.isInterviewOverlayMode()) {
+      const referenceBounds = this.lastOverlayBounds || this.getDefaultOverlayBounds();
+      const targetDisplay = screen.getDisplayMatching(referenceBounds);
+      return { ...targetDisplay.workArea };
+    }
+
     const desiredBounds = this.lastOverlayBounds
       ? {
           ...this.lastOverlayBounds,
@@ -126,6 +132,10 @@ export class WindowHelper {
 
   private isOverlayMousePassthroughEnabled(): boolean {
     return this.appState.getOverlayMousePassthrough()
+  }
+
+  private isInterviewOverlayMode(): boolean {
+    return this.appState.getSessionType() === 'interview' && this.appState.getIsMeetingActive();
   }
 
   private getOverlayShowInactive(inactive?: boolean): boolean {
@@ -180,6 +190,7 @@ export class WindowHelper {
   // Dedicated method for overlay window resizing - decoupled from launcher
   public setOverlayDimensions(width: number, height: number): void {
     if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return
+    if (this.isInterviewOverlayMode()) return
     console.log('[WindowHelper] setOverlayDimensions:', width, height);
 
     const currentBounds = this.overlayWindow.getBounds()
@@ -578,6 +589,15 @@ export class WindowHelper {
     } else {
       this.switchToOverlay(inactive);
     }
+  }
+
+  public syncOverlayMode(): void {
+    if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return;
+    if (this.currentWindowMode !== 'overlay') return;
+
+    const nextBounds = this.getOverlayBoundsForShow();
+    this.overlayWindow.setBounds(nextBounds);
+    this.rememberOverlayBounds(nextBounds);
   }
 
   // --- Window Movement (Applies to Overlay mostly, but generalized to active) ---

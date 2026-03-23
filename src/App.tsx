@@ -22,6 +22,8 @@ import {
 } from './premium'
 import { analytics } from "./lib/analytics/analytics.service"
 import { ErrorBoundary } from "./components/ErrorBoundary"
+import InterviewOverlay from "./components/interview/InterviewOverlay"
+import type { SessionType } from "./types/interview"
 
 const queryClient = new QueryClient()
 
@@ -84,6 +86,7 @@ const App: React.FC = () => {
   const [settingsInitialTab, setSettingsInitialTab] = useState('general');
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremiumActive, setIsPremiumActive] = useState(false);
+  const [sessionType, setSessionType] = useState<SessionType>('general');
 
   // Overlay opacity — only meaningful when isOverlayWindow, but stored centrally
   // so it can be initialized once from localStorage and updated via IPC.
@@ -170,6 +173,29 @@ const App: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+
+    window.electronAPI?.getSessionType?.()
+      .then((nextSessionType) => {
+        if (mounted) {
+          setSessionType(nextSessionType);
+        }
+      })
+      .catch(() => {});
+
+    const unsubscribe = window.electronAPI?.onSessionTypeChanged?.(({ sessionType: nextSessionType }) => {
+      if (mounted) {
+        setSessionType(nextSessionType);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
   // Listen for overlay opacity changes — scoped to overlay window only
   useEffect(() => {
     if (!isOverlayWindow) return;
@@ -201,7 +227,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleStartMeeting = async () => {
+  const startMeetingSession = async (nextSessionType: SessionType) => {
     try {
       localStorage.setItem('natively_last_meeting_start', Date.now().toString());
       const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
@@ -218,6 +244,8 @@ const App: React.FC = () => {
       }
 
       const result = await window.electronAPI.startMeeting({
+        sessionType: nextSessionType,
+        interviewLanguage: nextSessionType === 'interview' ? 'python' : undefined,
         audio: { inputDeviceId, outputDeviceId }
       });
       if (result.success) {
@@ -234,6 +262,15 @@ const App: React.FC = () => {
     } catch (err) {
       console.error("Failed to start meeting:", err);
     }
+  };
+
+  const handleStartMeeting = async () => {
+    await startMeetingSession('general');
+  };
+
+  const handleStartInterview = async () => {
+    analytics.trackCommandExecuted('start_interview_mode');
+    await startMeetingSession('interview');
   };
 
   const handleEndMeeting = async () => {
@@ -307,10 +344,17 @@ const App: React.FC = () => {
                   transition: 'background-color 75ms ease, border-color 75ms ease, box-shadow 75ms ease'
                 } as React.CSSProperties}
               >
-                <NativelyInterface
-                  onEndMeeting={handleEndMeeting}
-                  overlayOpacity={overlayOpacity}
-                />
+                {sessionType === 'interview' ? (
+                  <InterviewOverlay
+                    onEndMeeting={handleEndMeeting}
+                    overlayOpacity={overlayOpacity}
+                  />
+                ) : (
+                  <NativelyInterface
+                    onEndMeeting={handleEndMeeting}
+                    overlayOpacity={overlayOpacity}
+                  />
+                )}
               </div>
               <ToastViewport />
             </ToastProvider>
@@ -351,6 +395,7 @@ const App: React.FC = () => {
                 <div id="launcher-container" className="h-full w-full relative">
                   <Launcher
                     onStartMeeting={handleStartMeeting}
+                    onStartInterview={handleStartInterview}
                     onOpenSettings={(tab = 'general') => {
                       setSettingsInitialTab(tab);
                       setIsSettingsOpen(true);

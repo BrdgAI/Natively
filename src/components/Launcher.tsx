@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ToggleLeft, ToggleRight, Search, Zap, Calendar, ArrowRight, ArrowLeft, MoreHorizontal, Globe, Clock, ChevronRight, Settings, RefreshCw, Eye, EyeOff, Ghost, Plus, Mail, Link as LinkIcon, ChevronDown, Trash2, Bell, Check, Download, DownloadCloud, CheckCircle, AlertCircle } from 'lucide-react';
+import { ToggleLeft, ToggleRight, Search, Zap, Calendar, ArrowRight, ArrowLeft, MoreHorizontal, Globe, Clock, ChevronRight, Settings, RefreshCw, Eye, EyeOff, Ghost, Plus, Mail, Link as LinkIcon, ChevronDown, Trash2, Bell, Check, Download, DownloadCloud, CheckCircle, AlertCircle, Terminal } from 'lucide-react';
 import { generateMeetingPDF } from '../utils/pdfGenerator';
 import icon from "./icon.png";
 import mainui from "../UI_comp/mainui.png";
@@ -41,6 +41,7 @@ interface Meeting {
 
 interface LauncherProps {
     onStartMeeting: () => void;
+    onStartInterview?: () => void;
     onOpenSettings: (tab?: string) => void;
     onPageChange?: (isMain: boolean) => void;
     ollamaPullStatus?: 'idle' | 'downloading' | 'complete' | 'failed';
@@ -73,7 +74,7 @@ const formatTime = (dateStr: string) => {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
 };
 
-const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onPageChange, ollamaPullStatus = 'idle', ollamaPullPercent = 0, ollamaPullMessage = '' }) => {
+const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onStartInterview, onOpenSettings, onPageChange, ollamaPullStatus = 'idle', ollamaPullPercent = 0, ollamaPullMessage = '' }) => {
     const [meetings, setMeetings] = useState<Meeting[]>([]);
     const [isDetectable, setIsDetectable] = useState(false);
     const [isMeetingActive, setIsMeetingActive] = useState(false);
@@ -543,83 +544,92 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onP
                                         </div>
 
                                         {/* Unified CTA pill — same jelly shape, morphs between idle and active-meeting state */}
-                                        <motion.button
-                                            onClick={() => {
-                                                if (isMeetingActive) {
-                                                    // inactive=true: overlay appears on top but doesn't activate
-                                                    // the Natively app or steal OS focus — preserves stealth.
-                                                    // setWindowMode (not showWindow) is required because
-                                                    // logo-click set currentWindowMode='launcher', so showWindow()
-                                                    // would re-show the launcher rather than switch to overlay.
-                                                    window.electronAPI?.setWindowMode?.('overlay', true);
-                                                    analytics.trackCommandExecuted('resume_meeting_from_launcher');
-                                                } else {
-                                                    onStartMeeting();
-                                                    analytics.trackCommandExecuted('start_natively_cta');
-                                                }
-                                            }}
-                                            whileHover={{ scale: 1.01, filter: 'brightness(1.1)' }}
-                                            whileTap={{ scale: 0.99 }}
-                                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                                            className="group relative overflow-hidden text-white px-6 py-3 rounded-full font-celeb font-medium tracking-normal flex items-center justify-center gap-3 backdrop-blur-xl shrink-0"
-                                            style={{
-                                                boxShadow: isMeetingActive
-                                                    ? 'inset 0 1px 1px rgba(255,255,255,0.7), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 10px rgba(16,185,129,0.45), 0 0 0 1px rgba(255,255,255,0.15)'
-                                                    : 'inset 0 1px 1px rgba(255,255,255,0.7), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 10px rgba(14,165,233,0.4), 0 0 0 1px rgba(255,255,255,0.15)',
-                                                transition: 'box-shadow 0.5s ease-out',
-                                            }}
-                                        >
-                                            {/* Blue gradient layer (idle) */}
-                                            <div
-                                                className="absolute inset-0 bg-gradient-to-b from-sky-400 via-sky-500 to-blue-600 transition-opacity duration-500 ease-out"
-                                                style={{ opacity: isMeetingActive ? 0 : 1 }}
-                                            />
-                                            {/* Green gradient layer (meeting active) */}
-                                            <div
-                                                className="absolute inset-0 bg-gradient-to-b from-emerald-400 via-emerald-500 to-green-600 transition-opacity duration-500 ease-out"
-                                                style={{ opacity: isMeetingActive ? 1 : 0 }}
-                                            />
+                                        <div className="flex items-center gap-3 flex-wrap">
+                                            <motion.button
+                                                onClick={() => {
+                                                    if (isMeetingActive) {
+                                                        window.electronAPI?.setWindowMode?.('overlay', true);
+                                                        analytics.trackCommandExecuted('resume_meeting_from_launcher');
+                                                    } else {
+                                                        onStartMeeting();
+                                                        analytics.trackCommandExecuted('start_natively_cta');
+                                                    }
+                                                }}
+                                                whileHover={{ scale: 1.01, filter: 'brightness(1.1)' }}
+                                                whileTap={{ scale: 0.99 }}
+                                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                className="group relative overflow-hidden text-white px-6 py-3 rounded-full font-celeb font-medium tracking-normal flex items-center justify-center gap-3 backdrop-blur-xl shrink-0"
+                                                style={{
+                                                    boxShadow: isMeetingActive
+                                                        ? 'inset 0 1px 1px rgba(255,255,255,0.7), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 10px rgba(16,185,129,0.45), 0 0 0 1px rgba(255,255,255,0.15)'
+                                                        : 'inset 0 1px 1px rgba(255,255,255,0.7), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 10px rgba(14,165,233,0.4), 0 0 0 1px rgba(255,255,255,0.15)',
+                                                    transition: 'box-shadow 0.5s ease-out',
+                                                }}
+                                            >
+                                                <div
+                                                    className="absolute inset-0 bg-gradient-to-b from-sky-400 via-sky-500 to-blue-600 transition-opacity duration-500 ease-out"
+                                                    style={{ opacity: isMeetingActive ? 0 : 1 }}
+                                                />
+                                                <div
+                                                    className="absolute inset-0 bg-gradient-to-b from-emerald-400 via-emerald-500 to-green-600 transition-opacity duration-500 ease-out"
+                                                    style={{ opacity: isMeetingActive ? 1 : 0 }}
+                                                />
+                                                <div className="absolute inset-x-3 top-0 h-[40%] bg-gradient-to-b from-white/40 to-transparent blur-[2px] rounded-b-lg opacity-80 pointer-events-none z-10" />
+                                                <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none z-10" />
 
-                                            {/* Top highlight band — shared between both states */}
-                                            <div className="absolute inset-x-3 top-0 h-[40%] bg-gradient-to-b from-white/40 to-transparent blur-[2px] rounded-b-lg opacity-80 pointer-events-none z-10" />
-                                            {/* Internal suspended-light hover glow */}
-                                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none z-10" />
+                                                <div className="relative z-20 flex items-center gap-3">
+                                                    <AnimatePresence mode="wait" initial={false}>
+                                                        {isMeetingActive ? (
+                                                            <motion.div
+                                                                key="meeting"
+                                                                initial={{ opacity: 0, y: 6 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -6 }}
+                                                                transition={{ duration: 0.22, ease: 'easeOut' }}
+                                                                className="flex items-center gap-3"
+                                                            >
+                                                                <span className="relative flex h-[9px] w-[9px] shrink-0">
+                                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
+                                                                    <span className="relative inline-flex rounded-full h-[9px] w-[9px] bg-white" />
+                                                                </span>
+                                                                <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.1)] text-[20px] leading-none">Meeting ongoing</span>
+                                                            </motion.div>
+                                                        ) : (
+                                                            <motion.div
+                                                                key="start"
+                                                                initial={{ opacity: 0, y: 6 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -6 }}
+                                                                transition={{ duration: 0.22, ease: 'easeOut' }}
+                                                                className="flex items-center gap-3"
+                                                            >
+                                                                <img src={icon} alt="Logo" className="w-[18px] h-[18px] object-contain brightness-0 invert drop-shadow-[0_1px_2px_rgba(0,0,0,0.1)] opacity-90" />
+                                                                <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.1)] text-[20px] leading-none">Start Natively</span>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            </motion.button>
 
-                                            {/* Button content — crossfade between idle and meeting states */}
-                                            <div className="relative z-20 flex items-center gap-3">
-                                                <AnimatePresence mode="wait" initial={false}>
-                                                    {isMeetingActive ? (
-                                                        <motion.div
-                                                            key="meeting"
-                                                            initial={{ opacity: 0, y: 6 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -6 }}
-                                                            transition={{ duration: 0.22, ease: 'easeOut' }}
-                                                            className="flex items-center gap-3"
-                                                        >
-                                                            {/* Ping live-indicator dot */}
-                                                            <span className="relative flex h-[9px] w-[9px] shrink-0">
-                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
-                                                                <span className="relative inline-flex rounded-full h-[9px] w-[9px] bg-white" />
-                                                            </span>
-                                                            <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.1)] text-[20px] leading-none">Meeting ongoing</span>
-                                                        </motion.div>
-                                                    ) : (
-                                                        <motion.div
-                                                            key="start"
-                                                            initial={{ opacity: 0, y: 6 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -6 }}
-                                                            transition={{ duration: 0.22, ease: 'easeOut' }}
-                                                            className="flex items-center gap-3"
-                                                        >
-                                                            <img src={icon} alt="Logo" className="w-[18px] h-[18px] object-contain brightness-0 invert drop-shadow-[0_1px_2px_rgba(0,0,0,0.1)] opacity-90" />
-                                                            <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.1)] text-[20px] leading-none">Start Natively</span>
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
-                                        </motion.button>
+                                            {!isMeetingActive && onStartInterview && (
+                                                <motion.button
+                                                    onClick={onStartInterview}
+                                                    whileHover={{ y: -1, filter: 'brightness(1.06)' }}
+                                                    whileTap={{ scale: 0.99 }}
+                                                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                    className="group relative overflow-hidden px-5 py-3 rounded-full border border-white/20 bg-white/6 text-white/92 backdrop-blur-xl flex items-center gap-2 shrink-0"
+                                                    style={{
+                                                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), 0 18px 40px rgba(0,0,0,0.24)'
+                                                    }}
+                                                >
+                                                    <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(250,249,245,0.16),rgba(255,214,102,0.08),rgba(125,211,252,0.12))]" />
+                                                    <div className="relative z-10 flex items-center gap-2">
+                                                        <Terminal size={16} className="text-amber-200" />
+                                                        <span className="font-celeb text-[17px] leading-none">Interview Mode</span>
+                                                    </div>
+                                                </motion.button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* 2. Hero Section Cards */}

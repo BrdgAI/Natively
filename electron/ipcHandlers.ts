@@ -153,6 +153,36 @@ export function initializeIpcHandlers(appState: AppState): void {
     return { success: true };
   })
 
+  safeHandle("get-session-type", async () => {
+    return appState.getSessionType();
+  })
+
+  safeHandle("exit-interview-mode", async () => {
+    appState.exitInterviewMode();
+    return { success: true };
+  })
+
+  safeHandle("interview:get-state", async () => {
+    return appState.getInterviewOrchestrator().getState();
+  })
+
+  safeHandle("interview:next", async () => {
+    return appState.getInterviewOrchestrator().handleNext();
+  })
+
+  safeHandle("interview:sync", async () => {
+    return appState.getInterviewOrchestrator().handleSync();
+  })
+
+  safeHandle("interview:shift-phase", async (_, direction: -1 | 1) => {
+    return appState.getInterviewOrchestrator().shiftManualPhase(direction);
+  })
+
+  safeHandle("interview:set-scroll-offset", async (_, offset: number) => {
+    appState.getInterviewOrchestrator().setMainScrollOffset(offset);
+    return { success: true };
+  })
+
 
   safeHandle("delete-screenshot", async (event, filePath: string) => {
     // Guard: only allow deletion of files within the app's own userData directory

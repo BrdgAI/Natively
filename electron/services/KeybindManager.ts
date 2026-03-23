@@ -22,6 +22,13 @@ export const DEFAULT_KEYBINDS: KeybindConfig[] = [
     { id: 'general:take-screenshot', label: 'Take Screenshot', accelerator: 'CommandOrControl+H', isGlobal: true, defaultAccelerator: 'CommandOrControl+H', enabled: true, defaultEnabled: true },
     { id: 'general:selective-screenshot', label: 'Selective Screenshot', accelerator: 'CommandOrControl+Shift+H', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+H', enabled: true, defaultEnabled: true },
 
+    // Interview
+    { id: 'interview:phase-prev', label: 'Interview Phase Previous', accelerator: 'CommandOrControl+Shift+Left', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Left', enabled: false, defaultEnabled: false },
+    { id: 'interview:phase-next', label: 'Interview Phase Next', accelerator: 'CommandOrControl+Shift+Right', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Right', enabled: false, defaultEnabled: false },
+    { id: 'interview:scroll-up', label: 'Interview Scroll Up', accelerator: 'CommandOrControl+Shift+Up', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Up', enabled: true, defaultEnabled: true },
+    { id: 'interview:scroll-down', label: 'Interview Scroll Down', accelerator: 'CommandOrControl+Shift+Down', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Down', enabled: true, defaultEnabled: true },
+    { id: 'interview:exit-mode', label: 'Exit Interview Mode', accelerator: '', isGlobal: true, defaultAccelerator: '', enabled: false, defaultEnabled: false },
+
     // Chat - Global shortcuts (work even when app is not focused - stealth mode)
     { id: 'chat:whatToAnswer', label: 'What to Answer', accelerator: 'CommandOrControl+1', isGlobal: true, defaultAccelerator: 'CommandOrControl+1', enabled: true, defaultEnabled: true },
     { id: 'chat:shorten', label: 'Shorten', accelerator: 'CommandOrControl+2', isGlobal: true, defaultAccelerator: 'CommandOrControl+2', enabled: true, defaultEnabled: true },

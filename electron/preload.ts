@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron"
+import type { InterviewSessionSnapshot, SessionType } from "./interview/types"
 
 // Types for the exposed Electron API
 interface ElectronAPI {
@@ -87,6 +88,13 @@ interface ElectronAPI {
   setAiResponseLanguage: (language: string) => Promise<{ success: boolean; error?: string }>
   getSttLanguage: () => Promise<string>
   getAiResponseLanguage: () => Promise<string>
+  getSessionType: () => Promise<SessionType>
+  exitInterviewMode: () => Promise<{ success: boolean }>
+  getInterviewState: () => Promise<InterviewSessionSnapshot>
+  interviewNext: () => Promise<InterviewSessionSnapshot>
+  interviewSync: () => Promise<InterviewSessionSnapshot>
+  interviewShiftPhase: (direction: -1 | 1) => Promise<InterviewSessionSnapshot>
+  interviewSetScrollOffset: (offset: number) => Promise<{ success: boolean }>
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
@@ -158,6 +166,8 @@ interface ElectronAPI {
   hideOverlay: () => Promise<void>
   getMeetingActive: () => Promise<boolean>
   onMeetingStateChanged: (callback: (data: { isActive: boolean }) => void) => () => void
+  onSessionTypeChanged: (callback: (data: { sessionType: SessionType }) => void) => () => void
+  onInterviewStateUpdated: (callback: (snapshot: InterviewSessionSnapshot) => void) => () => void
   onEnsureExpanded: (callback: () => void) => () => void
   onToggleExpand: (callback: () => void) => () => void
   toggleAdvancedSettings: () => Promise<void>
@@ -430,6 +440,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on('meeting-state-changed', subscription);
     return () => { ipcRenderer.removeListener('meeting-state-changed', subscription); };
   },
+  onSessionTypeChanged: (callback: (data: { sessionType: SessionType }) => void) => {
+    const subscription = (_: any, data: { sessionType: SessionType }) => callback(data);
+    ipcRenderer.on('session-type-changed', subscription);
+    return () => { ipcRenderer.removeListener('session-type-changed', subscription); };
+  },
+  onInterviewStateUpdated: (callback: (snapshot: InterviewSessionSnapshot) => void) => {
+    const subscription = (_: any, snapshot: InterviewSessionSnapshot) => callback(snapshot);
+    ipcRenderer.on('interview:state-updated', subscription);
+    return () => { ipcRenderer.removeListener('interview:state-updated', subscription); };
+  },
   onEnsureExpanded: (callback: () => void) => {
     const subscription = () => callback();
     ipcRenderer.on('ensure-expanded', subscription);
@@ -560,6 +580,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setAiResponseLanguage: (language: string) => ipcRenderer.invoke("set-ai-response-language", language),
   getSttLanguage: () => ipcRenderer.invoke("get-stt-language"),
   getAiResponseLanguage: () => ipcRenderer.invoke("get-ai-response-language"),
+  getSessionType: () => ipcRenderer.invoke("get-session-type"),
+  exitInterviewMode: () => ipcRenderer.invoke("exit-interview-mode"),
+  getInterviewState: () => ipcRenderer.invoke("interview:get-state"),
+  interviewNext: () => ipcRenderer.invoke("interview:next"),
+  interviewSync: () => ipcRenderer.invoke("interview:sync"),
+  interviewShiftPhase: (direction: -1 | 1) => ipcRenderer.invoke("interview:shift-phase", direction),
+  interviewSetScrollOffset: (offset: number) => ipcRenderer.invoke("interview:set-scroll-offset", offset),
 
   // Intelligence Mode IPC
   generateAssist: () => ipcRenderer.invoke("generate-assist"),

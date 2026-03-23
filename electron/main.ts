@@ -144,6 +144,8 @@ import { SettingsManager } from "./services/SettingsManager"
 import { setVerboseLoggingFlag } from "./verboseLog"
 import { ReleaseNotesManager } from "./update/ReleaseNotesManager"
 import { OllamaManager } from './services/OllamaManager'
+import { InterviewOrchestrator } from './interview/InterviewOrchestrator'
+import { SessionType } from './interview/types'
 
 export class AppState {
   private static instance: AppState | null = null
@@ -156,6 +158,7 @@ export class AppState {
   public processingHelper: ProcessingHelper
 
   private intelligenceManager: IntelligenceManager
+  private interviewOrchestrator: InterviewOrchestrator
   private themeManager: ThemeManager
   private ragManager: RAGManager | null = null
   private knowledgeOrchestrator: any = null
@@ -178,6 +181,7 @@ export class AppState {
 
   private hasDebugged: boolean = false
   private isMeetingActive: boolean = false; // Guard for session state leaks
+  private currentSessionType: SessionType = 'general';
   private _isQuitting: boolean = false;
   private _verboseLogging: boolean = false;
   private _disguiseTimers: NodeJS.Timeout[] = []; // Track forceUpdate timeouts
@@ -244,6 +248,38 @@ export class AppState {
     keybindManager.onShortcutTriggered(async (actionId) => {
       console.log(`[Main] Global shortcut triggered: ${actionId}`);
       try {
+        if (this.currentSessionType === 'interview' && this.isMeetingActive) {
+          if (actionId === 'general:process-screenshots') {
+            await this.interviewOrchestrator.handleNext();
+            return;
+          }
+          if (actionId === 'general:capture-and-process') {
+            await this.interviewOrchestrator.handleSyncShortcut();
+            return;
+          }
+          if (actionId === 'interview:phase-prev') {
+            this.interviewOrchestrator.shiftManualPhase(-1);
+            return;
+          }
+          if (actionId === 'interview:phase-next') {
+            this.interviewOrchestrator.shiftManualPhase(1);
+            return;
+          }
+          if (actionId === 'interview:scroll-up' || actionId === 'interview:scroll-down') {
+            const action = actionId === 'interview:scroll-up' ? 'interviewScrollUp' : 'interviewScrollDown';
+            BrowserWindow.getAllWindows().forEach(win => {
+              if (!win.isDestroyed()) {
+                win.webContents.send('global-shortcut', { action });
+              }
+            });
+            return;
+          }
+          if (actionId === 'interview:exit-mode') {
+            this.exitInterviewMode();
+            return;
+          }
+        }
+
         if (actionId === 'general:toggle-visibility') {
           this.toggleMainWindow();
         } else if (actionId === 'general:toggle-mouse-passthrough') {
@@ -361,6 +397,7 @@ export class AppState {
 
     // Initialize IntelligenceManager with LLMHelper
     this.intelligenceManager = new IntelligenceManager(this.processingHelper.getLLMHelper())
+    this.interviewOrchestrator = new InterviewOrchestrator(this.processingHelper.getLLMHelper(), this)
 
     // Initialize ThemeManager
     this.themeManager = ThemeManager.getInstance()
@@ -373,6 +410,7 @@ export class AppState {
 
 
     this.setupIntelligenceEvents()
+    this.setupInterviewEvents()
 
     // Pre-warm the zero-shot intent classifier in background
     warmupIntentClassifier();
@@ -799,6 +837,16 @@ export class AppState {
         confidence: segment.confidence
       });
 
+      if (this.currentSessionType === 'interview') {
+        this.interviewOrchestrator.handleTranscript({
+          speaker,
+          text: segment.text,
+          timestamp: Date.now(),
+          final: segment.isFinal,
+          confidence: segment.confidence,
+        });
+      }
+
       // Feed final transcript to JIT RAG indexer
       if (segment.isFinal && this.ragManager) {
         this.ragManager.feedLiveTranscript([{
@@ -1108,10 +1156,21 @@ export class AppState {
       throw new Error(message);
     }
 
+    const sessionType: SessionType = metadata?.sessionType === 'interview' ? 'interview' : 'general';
+    this.currentSessionType = sessionType;
     this.isMeetingActive = true;
     this.broadcastMeetingState();
+    this._broadcastToAllWindows('session-type-changed', { sessionType: this.currentSessionType });
     if (metadata) {
       this.intelligenceManager.setMeetingMetadata(metadata);
+    }
+
+    this.interviewOrchestrator.startSession(sessionType, {
+      codingLanguage: metadata?.interviewLanguage === 'python' ? 'python' : 'python',
+    });
+    this.windowHelper.syncOverlayMode();
+    if (sessionType === 'interview') {
+      this.setOverlayMousePassthrough(true);
     }
 
     // Emit session reset to clear UI state immediately
@@ -1183,6 +1242,10 @@ export class AppState {
 
     // 4. Reset Intelligence Context & Save
     await this.intelligenceManager.stopMeeting();
+    this.interviewOrchestrator.endSession();
+    this.currentSessionType = 'general';
+    this.windowHelper.syncOverlayMode();
+    this._broadcastToAllWindows('session-type-changed', { sessionType: 'general' });
 
     // 5. Revert to Default Model (One-Way Sync Revert)
     // This ensures next meeting starts with default, not the temporary one used in this session
@@ -1352,6 +1415,12 @@ export class AppState {
     })
   }
 
+  private setupInterviewEvents(): void {
+    this.interviewOrchestrator.on('state-updated', (snapshot) => {
+      this._broadcastToAllWindows('interview:state-updated', snapshot);
+    });
+  }
+
 
 
 
@@ -1397,6 +1466,32 @@ export class AppState {
 
   public getIntelligenceManager(): IntelligenceManager {
     return this.intelligenceManager
+  }
+
+  public getInterviewOrchestrator(): InterviewOrchestrator {
+    return this.interviewOrchestrator
+  }
+
+  public getSessionType(): SessionType {
+    return this.currentSessionType;
+  }
+
+  public setSessionType(sessionType: SessionType): void {
+    if (this.currentSessionType === sessionType) return;
+    this.currentSessionType = sessionType;
+    this.interviewOrchestrator.setSessionType(sessionType);
+    this.windowHelper.syncOverlayMode();
+    this._broadcastToAllWindows('session-type-changed', { sessionType });
+  }
+
+  public exitInterviewMode(): void {
+    if (this.currentSessionType !== 'interview') return;
+    this.currentSessionType = 'general';
+    this.interviewOrchestrator.exitInterviewMode();
+    this.setOverlayMousePassthrough(false);
+    this.windowHelper.syncOverlayMode();
+    this.getWindowHelper().getOverlayWindow()?.webContents.send('session-reset');
+    this._broadcastToAllWindows('session-type-changed', { sessionType: 'general' });
   }
 
   public getThemeManager(): ThemeManager {

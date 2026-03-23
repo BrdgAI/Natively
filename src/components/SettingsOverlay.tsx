@@ -1193,6 +1193,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             ]
         },
         {
+            title: 'Interview',
+            items: [
+                { id: 'interviewPhasePrev', label: 'Phase Previous', icon: <ArrowLeft size={14} /> },
+                { id: 'interviewPhaseNext', label: 'Phase Next', icon: <ArrowRight size={14} /> },
+                { id: 'interviewScrollUp', label: 'Main Scroll Up', icon: <ArrowUp size={14} /> },
+                { id: 'interviewScrollDown', label: 'Main Scroll Down', icon: <ArrowDown size={14} /> },
+                { id: 'interviewExitMode', label: 'Exit Interview Mode', icon: <LogOut size={14} /> }
+            ]
+        },
+        {
             title: 'Window',
             items: [
                 { id: 'moveWindowUp', label: 'Move Window Up', icon: <ArrowUp size={14} /> },

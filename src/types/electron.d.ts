@@ -1,3 +1,5 @@
+import type { InterviewSessionSnapshot, SessionType } from './interview'
+
 export interface ElectronAPI {
   updateContentDimensions: (dimensions: {
     width: number
@@ -45,6 +47,8 @@ export interface ElectronAPI {
   hideOverlay: () => Promise<void>
   getMeetingActive: () => Promise<boolean>
   onMeetingStateChanged: (callback: (data: { isActive: boolean }) => void) => () => void
+  onSessionTypeChanged: (callback: (data: { sessionType: SessionType }) => void) => () => void
+  onInterviewStateUpdated: (callback: (snapshot: InterviewSessionSnapshot) => void) => () => void
   onEnsureExpanded: (callback: () => void) => () => void
   openExternal: (url: string) => Promise<void>
   setUndetectable: (state: boolean) => Promise<{ success: boolean; error?: string }>
@@ -108,6 +112,13 @@ export interface ElectronAPI {
   setAiResponseLanguage: (language: string) => Promise<{ success: boolean; error?: string }>
   getSttLanguage: () => Promise<string>
   getAiResponseLanguage: () => Promise<string>
+  getSessionType: () => Promise<SessionType>
+  exitInterviewMode: () => Promise<{ success: boolean }>
+  getInterviewState: () => Promise<InterviewSessionSnapshot>
+  interviewNext: () => Promise<InterviewSessionSnapshot>
+  interviewSync: () => Promise<InterviewSessionSnapshot>
+  interviewShiftPhase: (direction: -1 | 1) => Promise<InterviewSessionSnapshot>
+  interviewSetScrollOffset: (offset: number) => Promise<{ success: boolean }>
 
   getNativeAudioStatus: () => Promise<{ connected: boolean }>
 
