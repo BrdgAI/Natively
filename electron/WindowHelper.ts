@@ -2,6 +2,7 @@
 import { BrowserWindow, screen, app } from "electron"
 import { AppState } from "./main"
 import path from "node:path"
+import { getDevRuntimeLabel, getRendererBaseUrl } from "./devRuntime"
 
 const isEnvDev = process.env.NODE_ENV === "development"
 const isPackaged = app.isPackaged;
@@ -13,8 +14,12 @@ console.log(`[WindowHelper] isEnvDev: ${isEnvDev}, isPackaged: ${isPackaged}, in
 const isDev = isEnvDev && !isPackaged;
 
 const startUrl = isDev
-  ? "http://localhost:5180"
+  ? getRendererBaseUrl()
   : `file://${path.join(__dirname, "../../dist/index.html")}`
+
+if (isDev) {
+  console.log(`[WindowHelper] Dev runtime: ${getDevRuntimeLabel()}`);
+}
 
 export class WindowHelper {
   private launcherWindow: BrowserWindow | null = null

@@ -1,11 +1,12 @@
 import { BrowserWindow, screen, app } from "electron"
 import { WindowHelper } from "./WindowHelper"
 import path from "node:path"
+import { getRendererBaseUrl } from "./devRuntime"
 
 const isDev = process.env.NODE_ENV === "development"
 
 const startUrl = isDev
-    ? "http://localhost:5180"
+    ? getRendererBaseUrl()
     : `file://${path.join(app.getAppPath(), "dist/index.html")}`
 
 type WindowActivationOptions = {

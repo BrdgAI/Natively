@@ -2,6 +2,7 @@ import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, systemPref
 import path from "path"
 import fs from "fs"
 import { autoUpdater } from "electron-updater"
+import { getDevRuntimeLabel } from "./devRuntime"
 if (!app.isPackaged) {
   require('dotenv').config();
 }
@@ -18,6 +19,10 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, promise) => {
   logToFile('[CRITICAL] Unhandled Rejection at: ' + promise + ' reason: ' + (reason instanceof Error ? reason.stack : reason));
 });
+
+if (process.env.NODE_ENV === 'development') {
+  console.log(`[Main] Dev runtime: ${getDevRuntimeLabel()}`);
+}
 
 const logFile = path.join(app.getPath('documents'), 'natively_debug.log');
 
