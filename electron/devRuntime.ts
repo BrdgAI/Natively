@@ -1,4 +1,5 @@
 import { app } from "electron"
+import os from "node:os"
 import path from "node:path"
 
 const DEFAULT_DEV_PORT = 5181
@@ -16,6 +17,28 @@ function parsePort(value?: string): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function sanitizeWorktreeName(value: string): string {
+  const sanitized = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+
+  return sanitized || "default"
+}
+
+function getDefaultAppDataPath(): string {
+  if (process.platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Application Support")
+  }
+
+  if (process.platform === "win32") {
+    return process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
+  }
+
+  return process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config")
+}
+
 export function getDevWorktreeName(): string {
   return process.env.NATIVELY_WORKTREE_NAME || path.basename(app.getAppPath())
 }
@@ -31,7 +54,20 @@ export function getRendererBaseUrl(): string {
   return `http://localhost:${getDevServerPort()}`
 }
 
+export function getDevUserDataPath(): string {
+  if (process.env.NATIVELY_DEV_USER_DATA) {
+    return process.env.NATIVELY_DEV_USER_DATA
+  }
+
+  const safeWorktreeName = sanitizeWorktreeName(getDevWorktreeName())
+  return path.join(getDefaultAppDataPath(), `natively-dev-${safeWorktreeName}`)
+}
+
+export function getDevSessionDataPath(): string {
+  return path.join(getDevUserDataPath(), "session-data")
+}
+
 export function getDevRuntimeLabel(): string {
   const branch = process.env.NATIVELY_GIT_BRANCH || 'unknown-branch'
-  return `${getDevWorktreeName()} (${branch}) @ ${getRendererBaseUrl()}`
+  return `${getDevWorktreeName()} (${branch}) @ ${getRendererBaseUrl()} userData=${getDevUserDataPath()}`
 }

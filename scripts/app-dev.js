@@ -28,6 +28,7 @@ const childEnv = {
   NATIVELY_DEV_PORT: String(context.port),
   NATIVELY_WORKTREE_NAME: context.worktreeName,
   NATIVELY_GIT_BRANCH: branch,
+  NATIVELY_DEV_USER_DATA: context.userDataDir,
 };
 
 let viteProcess = null;
@@ -66,7 +67,7 @@ function spawnLogged(command, args, extraEnv = {}) {
 }
 
 console.log(
-  `[app:dev] worktree=${context.worktreeName} branch=${branch} url=${context.url}`
+  `[app:dev] worktree=${context.worktreeName} branch=${branch} url=${context.url} userData=${context.userDataDir}`
 );
 
 viteProcess = spawnLogged(npmCmd, ['run', 'dev', '--', '--port', String(context.port), '--strictPort']);

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, systemPreferences, screen } from "electron"
+import "./configureDevPaths"
 import path from "path"
 import fs from "fs"
 import { autoUpdater } from "electron-updater"
