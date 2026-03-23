@@ -10,19 +10,20 @@ This book has 7 sections. Each section covers a specific skill you need. Every s
 
 **Reading order for someone starting fresh:**
 1. This file (00) — understand the full picture
-2. Section 01 — personality and warmth (most underrated, read early)
-3. Section 05 — pronunciation (practice out loud from day 1)
-4. Section 04 — vocabulary (read before practicing code)
-5. Section 02 — constraint writing (practice this every session)
-6. Section 03 — technical code reference (your main study material)
-7. Section 06 — recovery phrases (memorize before the interview week)
-8. Section 07 — dry run language (practice this alongside coding)
+2. Section 08 — DS & algorithms guide (what every structure IS and when to use it)
+3. Section 01 — personality and warmth (most underrated, read early)
+4. Section 05 — pronunciation (practice out loud from day 1)
+5. Section 04 — vocabulary (read before practicing code)
+6. Section 02 — constraint writing (practice this every session)
+7. Section 03 — technical code reference (your main coding study material)
+8. Section 06 — recovery phrases (memorize before the interview week)
+9. Section 07 — dry run language (practice this alongside coding)
 
 **Day before the interview:** Re-read sections 01, 06, and the pocket cheat card at the bottom of this file.
 
 ---
 
-## The 7 Sections at a Glance
+## The 8 Sections at a Glance
 
 | File | What it is | When to use it |
 |------|-----------|----------------|
@@ -33,6 +34,7 @@ This book has 7 sections. Each section covers a specific skill you need. Every s
 | `05-pronunciation-and-speaking-guide.md` | How to say O(n), Dijkstra, 10^5, etc. | Practice out loud daily |
 | `06-safe-phrases-and-recovery-scripts.md` | What to say when stuck, blank, or wrong | Memorize before interview week |
 | `07-dry-run-and-testing-language.md` | How to trace code out loud step-by-step | Use every practice session |
+| `08-data-structures-and-algorithms-guide.md` | Theory, types, when to use, skeletons for all DS/algos | Study one chapter per day |
 
 ---
 
