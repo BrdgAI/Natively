@@ -22,7 +22,7 @@ const InterviewMainPanel: React.FC<InterviewMainPanelProps> = ({ snapshot, scrol
           <Hero
             eyebrow="Ready"
             title="Interview guidance is standing by."
-            body={snapshot.statusMessage || 'Press Cmd+Enter as soon as the problem appears. Press Cmd+Shift+Enter only when screen context matters.'}
+            body={snapshot.statusMessage || 'Press Cmd+Enter as soon as the problem appears. Press Cmd+Shift+Enter only when screen context matters. Use Cmd+Shift+I to leave and later resume the same interview flow.'}
           />
           <Section title="What To Do Next" icon={<ArrowRight size={15} />}>
             {[

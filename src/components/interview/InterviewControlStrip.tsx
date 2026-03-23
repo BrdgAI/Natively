@@ -46,7 +46,7 @@ const InterviewControlStrip: React.FC<InterviewControlStripProps> = ({
           </button>
           <button type="button" onClick={onExitInterviewMode} className="interview-control-button bg-[#111827] text-white border-[#111827] hover:bg-[#1f2937]">
             <Power size={14} />
-            <span>Exit</span>
+            <span>Leave</span>
           </button>
         </div>
       </div>

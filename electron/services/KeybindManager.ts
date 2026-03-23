@@ -12,22 +12,56 @@ export interface KeybindConfig {
     defaultEnabled: boolean;
 }
 
+export interface KeybindMutationResult {
+    success: boolean;
+    error?: string;
+    conflictWithId?: string;
+    conflictWithLabel?: string;
+}
+
+type PersistedKeybindOverride = {
+    id: string;
+    accelerator?: string;
+    enabled?: boolean;
+};
+
+const GENERAL_PROCESS_ACCELERATOR = 'CommandOrControl+Alt+Enter';
+const GENERAL_CAPTURE_ACCELERATOR = 'CommandOrControl+Alt+Shift+Enter';
+const INTERVIEW_NEXT_ACCELERATOR = 'CommandOrControl+Enter';
+const INTERVIEW_SYNC_ACCELERATOR = 'CommandOrControl+Shift+Enter';
+const INTERVIEW_PHASE_PREV_ACCELERATOR = 'CommandOrControl+Shift+Left';
+const INTERVIEW_PHASE_NEXT_ACCELERATOR = 'CommandOrControl+Shift+Right';
+const INTERVIEW_SCROLL_UP_ACCELERATOR = 'CommandOrControl+Shift+Up';
+const INTERVIEW_SCROLL_DOWN_ACCELERATOR = 'CommandOrControl+Shift+Down';
+const INTERVIEW_TOGGLE_ACCELERATOR = 'CommandOrControl+Shift+I';
+
+const LEGACY_GENERAL_PROCESS_ACCELERATOR = 'CommandOrControl+Enter';
+const LEGACY_GENERAL_CAPTURE_ACCELERATOR = 'CommandOrControl+Shift+Enter';
+const LEGACY_INTERVIEW_TOGGLE_ACCELERATOR = '';
+
+const ALLOWED_DUPLICATE_KEYBIND_SETS = new Set([
+    buildDuplicateKey('chat:scrollUp', 'window:move-up'),
+    buildDuplicateKey('chat:scrollDown', 'window:move-down'),
+]);
+
 export const DEFAULT_KEYBINDS: KeybindConfig[] = [
     // General
     { id: 'general:toggle-visibility', label: 'Toggle Visibility', accelerator: 'CommandOrControl+B', isGlobal: true, defaultAccelerator: 'CommandOrControl+B', enabled: true, defaultEnabled: true },
     { id: 'general:toggle-mouse-passthrough', label: 'Toggle Mouse Passthrough', accelerator: 'CommandOrControl+Shift+B', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+B', enabled: true, defaultEnabled: true },
-    { id: 'general:process-screenshots', label: 'Process Screenshots', accelerator: 'CommandOrControl+Enter', isGlobal: true, defaultAccelerator: 'CommandOrControl+Enter', enabled: true, defaultEnabled: true },
-    { id: 'general:capture-and-process', label: 'Capture Screen & Ask AI (Global)', accelerator: 'CommandOrControl+Shift+Enter', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Enter', enabled: true, defaultEnabled: true },
+    { id: 'general:process-screenshots', label: 'Process Screenshots', accelerator: GENERAL_PROCESS_ACCELERATOR, isGlobal: true, defaultAccelerator: GENERAL_PROCESS_ACCELERATOR, enabled: true, defaultEnabled: true },
+    { id: 'general:capture-and-process', label: 'Capture Screen & Ask AI (Global)', accelerator: GENERAL_CAPTURE_ACCELERATOR, isGlobal: true, defaultAccelerator: GENERAL_CAPTURE_ACCELERATOR, enabled: true, defaultEnabled: true },
     { id: 'general:reset-cancel', label: 'Reset / Cancel', accelerator: 'CommandOrControl+R', isGlobal: true, defaultAccelerator: 'CommandOrControl+R', enabled: true, defaultEnabled: true },
     { id: 'general:take-screenshot', label: 'Take Screenshot', accelerator: 'CommandOrControl+H', isGlobal: true, defaultAccelerator: 'CommandOrControl+H', enabled: true, defaultEnabled: true },
     { id: 'general:selective-screenshot', label: 'Selective Screenshot', accelerator: 'CommandOrControl+Shift+H', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+H', enabled: true, defaultEnabled: true },
 
     // Interview
-    { id: 'interview:phase-prev', label: 'Interview Phase Previous', accelerator: 'CommandOrControl+Shift+Left', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Left', enabled: false, defaultEnabled: false },
-    { id: 'interview:phase-next', label: 'Interview Phase Next', accelerator: 'CommandOrControl+Shift+Right', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Right', enabled: false, defaultEnabled: false },
-    { id: 'interview:scroll-up', label: 'Interview Scroll Up', accelerator: 'CommandOrControl+Shift+Up', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Up', enabled: true, defaultEnabled: true },
-    { id: 'interview:scroll-down', label: 'Interview Scroll Down', accelerator: 'CommandOrControl+Shift+Down', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Down', enabled: true, defaultEnabled: true },
-    { id: 'interview:exit-mode', label: 'Exit Interview Mode', accelerator: '', isGlobal: true, defaultAccelerator: '', enabled: false, defaultEnabled: false },
+    { id: 'interview:next', label: 'Interview Next', accelerator: INTERVIEW_NEXT_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_NEXT_ACCELERATOR, enabled: true, defaultEnabled: true },
+    { id: 'interview:sync', label: 'Interview Sync', accelerator: INTERVIEW_SYNC_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_SYNC_ACCELERATOR, enabled: true, defaultEnabled: true },
+    { id: 'interview:phase-prev', label: 'Interview Phase Previous', accelerator: INTERVIEW_PHASE_PREV_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_PHASE_PREV_ACCELERATOR, enabled: true, defaultEnabled: true },
+    { id: 'interview:phase-next', label: 'Interview Phase Next', accelerator: INTERVIEW_PHASE_NEXT_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_PHASE_NEXT_ACCELERATOR, enabled: true, defaultEnabled: true },
+    { id: 'interview:scroll-up', label: 'Interview Scroll Up', accelerator: INTERVIEW_SCROLL_UP_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_SCROLL_UP_ACCELERATOR, enabled: true, defaultEnabled: true },
+    { id: 'interview:scroll-down', label: 'Interview Scroll Down', accelerator: INTERVIEW_SCROLL_DOWN_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_SCROLL_DOWN_ACCELERATOR, enabled: true, defaultEnabled: true },
+    { id: 'interview:exit-mode', label: 'Leave / Resume Interview', accelerator: INTERVIEW_TOGGLE_ACCELERATOR, isGlobal: true, defaultAccelerator: INTERVIEW_TOGGLE_ACCELERATOR, enabled: true, defaultEnabled: true },
 
     // Chat - Global shortcuts (work even when app is not focused - stealth mode)
     { id: 'chat:whatToAnswer', label: 'What to Answer', accelerator: 'CommandOrControl+1', isGlobal: true, defaultAccelerator: 'CommandOrControl+1', enabled: true, defaultEnabled: true },
@@ -80,29 +114,27 @@ export class KeybindManager {
     }
 
     private load() {
-        // 1. Load Defaults
-        DEFAULT_KEYBINDS.forEach(kb => this.keybinds.set(kb.id, { ...kb }));
+        let overrides: PersistedKeybindOverride[] = [];
+        let didMigrate = false;
 
-        // 2. Load Overrides
         try {
             if (fs.existsSync(this.filePath)) {
                 const data = JSON.parse(fs.readFileSync(this.filePath, 'utf-8'));
-                // Validate and merge
-                for (const fileKb of data) {
-                    if (this.keybinds.has(fileKb.id)) {
-                        const current = this.keybinds.get(fileKb.id)!;
-                        if (typeof fileKb.accelerator === 'string') {
-                            current.accelerator = fileKb.accelerator;
-                        }
-                        if (typeof fileKb.enabled === 'boolean') {
-                            current.enabled = fileKb.enabled;
-                        }
-                        this.keybinds.set(fileKb.id, current);
-                    }
+                if (Array.isArray(data)) {
+                    overrides = data;
                 }
             }
         } catch (error) {
             console.error('[KeybindManager] Failed to load keybinds:', error);
+        }
+
+        const merged = mergeAndMigrateKeybinds(overrides);
+        didMigrate = merged.didMigrate;
+        this.keybinds.clear();
+        merged.keybinds.forEach((kb) => this.keybinds.set(kb.id, kb));
+
+        if (didMigrate) {
+            this.save();
         }
     }
 
@@ -137,8 +169,15 @@ export class KeybindManager {
         return Array.from(this.keybinds.values());
     }
 
-    public setKeybind(id: string, accelerator: string) {
-        if (!this.keybinds.has(id)) return;
+    public setKeybind(id: string, accelerator: string): KeybindMutationResult {
+        if (!this.keybinds.has(id)) {
+            return { success: false, error: 'Shortcut not found.' };
+        }
+
+        const validation = validateKeybindMutation(this.getAllKeybinds(), id, { accelerator });
+        if (!validation.success) {
+            return validation;
+        }
 
         const kb = this.keybinds.get(id)!;
         kb.accelerator = accelerator;
@@ -147,10 +186,18 @@ export class KeybindManager {
         this.save();
         this.registerGlobalShortcuts(); // Re-register if it was a global one
         this.broadcastUpdate();
+        return { success: true };
     }
 
-    public setKeybindEnabled(id: string, enabled: boolean) {
-        if (!this.keybinds.has(id)) return;
+    public setKeybindEnabled(id: string, enabled: boolean): KeybindMutationResult {
+        if (!this.keybinds.has(id)) {
+            return { success: false, error: 'Shortcut not found.' };
+        }
+
+        const validation = validateKeybindMutation(this.getAllKeybinds(), id, { enabled });
+        if (!validation.success) {
+            return validation;
+        }
 
         const kb = this.keybinds.get(id)!;
         kb.enabled = enabled;
@@ -159,6 +206,7 @@ export class KeybindManager {
         this.save();
         this.registerGlobalShortcuts();
         this.broadcastUpdate();
+        return { success: true };
     }
 
     public resetKeybinds() {
@@ -317,14 +365,12 @@ export class KeybindManager {
 
         ipcMain.handle('keybinds:set', (_, id: string, accelerator: string) => {
             console.log(`[KeybindManager] Set ${id} -> ${accelerator}`);
-            this.setKeybind(id, accelerator);
-            return true;
+            return this.setKeybind(id, accelerator);
         });
 
         ipcMain.handle('keybinds:set-enabled', (_, id: string, enabled: boolean) => {
             console.log(`[KeybindManager] Set enabled ${id} -> ${enabled}`);
-            this.setKeybindEnabled(id, enabled);
-            return true;
+            return this.setKeybindEnabled(id, enabled);
         });
 
         ipcMain.handle('keybinds:reset', () => {
@@ -333,4 +379,131 @@ export class KeybindManager {
             return this.getAllKeybinds();
         });
     }
+}
+
+export function mergeAndMigrateKeybinds(overrides: PersistedKeybindOverride[]): { keybinds: KeybindConfig[]; didMigrate: boolean } {
+    const keybinds = DEFAULT_KEYBINDS.map((kb) => ({ ...kb }));
+    const byId = new Map(keybinds.map((kb) => [kb.id, kb]));
+    let didMigrate = false;
+
+    for (const override of overrides) {
+        const current = byId.get(override.id);
+        if (!current) {
+            continue;
+        }
+
+        if (typeof override.accelerator === 'string') {
+            current.accelerator = override.accelerator;
+        }
+        if (typeof override.enabled === 'boolean') {
+            current.enabled = override.enabled;
+        }
+    }
+
+    didMigrate = migrateGeneralReservedPairs(byId) || didMigrate;
+    didMigrate = migrateInterviewDefaults(byId) || didMigrate;
+
+    return {
+        keybinds: keybinds.map((kb) => ({ ...kb })),
+        didMigrate,
+    };
+}
+
+export function validateKeybindMutation(
+    keybinds: KeybindConfig[],
+    id: string,
+    nextValues: Partial<Pick<KeybindConfig, 'accelerator' | 'enabled'>>
+): KeybindMutationResult {
+    const nextKeybinds = keybinds.map((kb) => ({ ...kb }));
+    const target = nextKeybinds.find((kb) => kb.id === id);
+
+    if (!target) {
+        return { success: false, error: 'Shortcut not found.' };
+    }
+
+    if (nextValues.accelerator !== undefined) {
+        target.accelerator = nextValues.accelerator;
+    }
+    if (nextValues.enabled !== undefined) {
+        target.enabled = nextValues.enabled;
+    }
+
+    const targetAccelerator = normalizeAccelerator(target.accelerator);
+    if (!target.enabled || !targetAccelerator) {
+        return { success: true };
+    }
+
+    const conflict = nextKeybinds.find((candidate) => {
+        if (candidate.id === id || !candidate.enabled) {
+            return false;
+        }
+
+        if (normalizeAccelerator(candidate.accelerator) !== targetAccelerator) {
+            return false;
+        }
+
+        return !ALLOWED_DUPLICATE_KEYBIND_SETS.has(buildDuplicateKey(id, candidate.id));
+    });
+
+    if (!conflict) {
+        return { success: true };
+    }
+
+    return {
+        success: false,
+        error: `${target.label} conflicts with ${conflict.label}. Choose a different shortcut or disable one of them.`,
+        conflictWithId: conflict.id,
+        conflictWithLabel: conflict.label,
+    };
+}
+
+function migrateGeneralReservedPairs(byId: Map<string, KeybindConfig>): boolean {
+    let didMigrate = false;
+
+    const processKeybind = byId.get('general:process-screenshots');
+    if (processKeybind && normalizeAccelerator(processKeybind.accelerator) === normalizeAccelerator(LEGACY_GENERAL_PROCESS_ACCELERATOR)) {
+        processKeybind.accelerator = GENERAL_PROCESS_ACCELERATOR;
+        didMigrate = true;
+    }
+
+    const captureKeybind = byId.get('general:capture-and-process');
+    if (captureKeybind && normalizeAccelerator(captureKeybind.accelerator) === normalizeAccelerator(LEGACY_GENERAL_CAPTURE_ACCELERATOR)) {
+        captureKeybind.accelerator = GENERAL_CAPTURE_ACCELERATOR;
+        didMigrate = true;
+    }
+
+    return didMigrate;
+}
+
+function migrateInterviewDefaults(byId: Map<string, KeybindConfig>): boolean {
+    let didMigrate = false;
+
+    const phasePrev = byId.get('interview:phase-prev');
+    if (phasePrev && normalizeAccelerator(phasePrev.accelerator) === normalizeAccelerator(INTERVIEW_PHASE_PREV_ACCELERATOR) && phasePrev.enabled === false) {
+        phasePrev.enabled = true;
+        didMigrate = true;
+    }
+
+    const phaseNext = byId.get('interview:phase-next');
+    if (phaseNext && normalizeAccelerator(phaseNext.accelerator) === normalizeAccelerator(INTERVIEW_PHASE_NEXT_ACCELERATOR) && phaseNext.enabled === false) {
+        phaseNext.enabled = true;
+        didMigrate = true;
+    }
+
+    const toggle = byId.get('interview:exit-mode');
+    if (toggle && normalizeAccelerator(toggle.accelerator) === normalizeAccelerator(LEGACY_INTERVIEW_TOGGLE_ACCELERATOR) && toggle.enabled === false) {
+        toggle.accelerator = INTERVIEW_TOGGLE_ACCELERATOR;
+        toggle.enabled = true;
+        didMigrate = true;
+    }
+
+    return didMigrate;
+}
+
+function normalizeAccelerator(accelerator: string): string {
+    return accelerator.trim().toLowerCase();
+}
+
+function buildDuplicateKey(a: string, b: string): string {
+    return [a, b].sort().join('::');
 }

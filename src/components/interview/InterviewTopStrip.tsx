@@ -70,7 +70,7 @@ const InterviewTopStrip: React.FC<InterviewTopStripProps> = ({
         <div className="flex flex-wrap items-center justify-end gap-2">
           <StripButton label="Next" icon={<ArrowRight size={14} />} onClick={onNext} />
           <StripButton label="Sync" icon={<ScanLine size={14} />} onClick={onSync} />
-          <StripButton label="Exit Interview" icon={<Power size={14} />} onClick={onExitInterviewMode} tone="soft" />
+          <StripButton label="Leave Interview" icon={<Power size={14} />} onClick={onExitInterviewMode} tone="soft" />
           <StripButton label="End Meeting" icon={<Power size={14} />} onClick={onEndMeeting} tone="danger" />
         </div>
       </div>

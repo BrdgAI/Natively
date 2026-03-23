@@ -162,7 +162,7 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
   }
 
   const handleExitInterviewMode = async () => {
-    await window.electronAPI?.exitInterviewMode?.()
+    await window.electronAPI?.toggleInterviewMode?.()
   }
 
   const handleScroll = () => {

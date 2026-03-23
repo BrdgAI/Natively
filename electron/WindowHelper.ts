@@ -25,6 +25,7 @@ export class WindowHelper {
   private launcherWindow: BrowserWindow | null = null
   private overlayWindow: BrowserWindow | null = null
   private lastOverlayBounds: Electron.Rectangle | null = null
+  private lastNonInterviewOverlayBounds: Electron.Rectangle | null = null
   private lastOverlayDisplayId: number | null = null
   private isWindowVisible: boolean = false
   // Position/Size tracking for Launcher
@@ -86,13 +87,16 @@ export class WindowHelper {
     if (!targetBounds || targetBounds.width <= 0 || targetBounds.height <= 0) return
 
     this.lastOverlayBounds = { ...targetBounds }
+    if (!this.isInterviewOverlayMode()) {
+      this.lastNonInterviewOverlayBounds = { ...targetBounds }
+    }
     this.lastOverlayDisplayId = screen.getDisplayMatching(targetBounds).id
   }
 
   private getDefaultOverlayBounds(): Electron.Rectangle {
     const primaryDisplay = screen.getPrimaryDisplay()
     const workArea = primaryDisplay.workArea
-    const currentBounds = this.overlayWindow?.getBounds()
+    const currentBounds = this.lastNonInterviewOverlayBounds
     const width = Math.max(currentBounds?.width ?? 600, 300)
     const height = Math.max(currentBounds?.height ?? 216, 216)
 
@@ -111,11 +115,11 @@ export class WindowHelper {
       return { ...targetDisplay.workArea };
     }
 
-    const desiredBounds = this.lastOverlayBounds
+    const desiredBounds = this.lastNonInterviewOverlayBounds
       ? {
-          ...this.lastOverlayBounds,
-          width: Math.max(this.lastOverlayBounds.width, 300),
-          height: Math.max(this.lastOverlayBounds.height, 216)
+          ...this.lastNonInterviewOverlayBounds,
+          width: Math.max(this.lastNonInterviewOverlayBounds.width, 300),
+          height: Math.max(this.lastNonInterviewOverlayBounds.height, 216)
         }
       : this.getDefaultOverlayBounds()
     const workArea = screen.getDisplayMatching(desiredBounds).workArea

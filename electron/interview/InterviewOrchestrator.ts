@@ -77,14 +77,29 @@ export class InterviewOrchestrator extends EventEmitter {
   }
 
   public exitInterviewMode(): void {
+    this.pauseInterviewMode();
+  }
+
+  public pauseInterviewMode(): void {
     this.cancelPrefetch();
-    this.buffer.invalidateAll();
-    this.lastAdvanceCount = 0;
-    this.ledger.exitInterviewMode();
+    this.ledger.pauseInterviewMode();
+  }
+
+  public resumeInterviewMode(): void {
+    if (!this.ledger.hasPausedInterviewSession()) {
+      return;
+    }
+
+    this.ledger.resumeInterviewMode();
+    this.schedulePrefetch('resume');
   }
 
   public setSessionType(sessionType: SessionType): void {
     this.ledger.setSessionType(sessionType);
+  }
+
+  public hasPausedSession(): boolean {
+    return this.ledger.hasPausedInterviewSession();
   }
 
   public getState(): InterviewSessionSnapshot {
@@ -92,13 +107,17 @@ export class InterviewOrchestrator extends EventEmitter {
   }
 
   public handleTranscript(segment: InterviewTranscriptSegment): void {
-    if (this.ledger.getSnapshot().sessionType !== 'interview') {
+    if (!this.ledger.hasRetainedInterviewSession()) {
       return;
     }
 
     this.ledger.addTranscript(segment);
 
     if (!segment.final) {
+      return;
+    }
+
+    if (!this.ledger.getSnapshot().active) {
       return;
     }
 

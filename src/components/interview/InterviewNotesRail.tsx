@@ -43,6 +43,7 @@ const InterviewNotesRail: React.FC<InterviewNotesRailProps> = ({ snapshot, mouse
           <div className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2">`Cmd+Enter` moves to the next script chunk or reveals buffered backup lines.</div>
           <div className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2">`Cmd+Shift+Enter` syncs the screen. Press it again right after sync to cycle phases.</div>
           <div className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2">`Cmd+Shift+Up/Down` scrolls the main reading lane.</div>
+          <div className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2">`Cmd+Shift+Left/Right` steps phases manually, and `Cmd+Shift+I` leaves or resumes the same interview flow.</div>
           <div className="rounded-[16px] border border-black/6 bg-[#fffdf9]/90 px-3 py-2">
             {mousePassthrough ? 'Click-through is on, so use shortcuts unless you toggle mouse passthrough off.' : 'Click-through is off, so you can use the on-screen interview controls.'}
           </div>

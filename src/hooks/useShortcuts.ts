@@ -9,6 +9,8 @@ export interface ShortcutConfig {
     answer: string[];
     scrollUp: string[];
     scrollDown: string[];
+    interviewNext: string[];
+    interviewSync: string[];
     interviewPhasePrev: string[];
     interviewPhaseNext: string[];
     interviewScrollUp: string[];
@@ -29,6 +31,12 @@ export interface ShortcutConfig {
 
 export type ShortcutActionId = keyof ShortcutConfig;
 export type ShortcutEnabledConfig = Record<ShortcutActionId, boolean>;
+export type ShortcutMutationResult = {
+    success: boolean;
+    error?: string;
+    conflictWithId?: string;
+    conflictWithLabel?: string;
+};
 
 type BackendKeybind = {
     id: string;
@@ -48,6 +56,8 @@ const BACKEND_ID_BY_ACTION: Record<ShortcutActionId, string> = {
     answer: 'chat:answer',
     scrollUp: 'chat:scrollUp',
     scrollDown: 'chat:scrollDown',
+    interviewNext: 'interview:next',
+    interviewSync: 'interview:sync',
     interviewPhasePrev: 'interview:phase-prev',
     interviewPhaseNext: 'interview:phase-next',
     interviewScrollUp: 'interview:scroll-up',
@@ -78,19 +88,21 @@ export const DEFAULT_SHORTCUTS: ShortcutConfig = {
     answer: ['⌘', '5'],
     scrollUp: ['⌘', '↑'],
     scrollDown: ['⌘', '↓'],
+    interviewNext: ['⌘', 'Enter'],
+    interviewSync: ['⌘', '⇧', 'Enter'],
     interviewPhasePrev: ['⌘', '⇧', '←'],
     interviewPhaseNext: ['⌘', '⇧', '→'],
     interviewScrollUp: ['⌘', '⇧', '↑'],
     interviewScrollDown: ['⌘', '⇧', '↓'],
-    interviewExitMode: [],
+    interviewExitMode: ['⌘', '⇧', 'I'],
     moveWindowUp: ['⌘', '↑'],
     moveWindowDown: ['⌘', '↓'],
     moveWindowLeft: ['⌘', '←'],
     moveWindowRight: ['⌘', '→'],
     toggleVisibility: ['⌘', 'B'],
     toggleMousePassthrough: ['⌘', '⇧', 'B'],
-    processScreenshots: ['⌘', 'Enter'],
-    captureAndProcess: ['⌘', '⇧', 'Enter'],
+    processScreenshots: ['⌘', '⌥', 'Enter'],
+    captureAndProcess: ['⌘', '⌥', '⇧', 'Enter'],
     resetCancel: ['⌘', 'R'],
     takeScreenshot: ['⌘', 'H'],
     selectiveScreenshot: ['⌘', '⇧', 'H']
@@ -104,11 +116,13 @@ export const DEFAULT_SHORTCUT_ENABLED: ShortcutEnabledConfig = {
     answer: true,
     scrollUp: true,
     scrollDown: true,
-    interviewPhasePrev: false,
-    interviewPhaseNext: false,
+    interviewNext: true,
+    interviewSync: true,
+    interviewPhasePrev: true,
+    interviewPhaseNext: true,
     interviewScrollUp: true,
     interviewScrollDown: true,
-    interviewExitMode: false,
+    interviewExitMode: true,
     moveWindowUp: true,
     moveWindowDown: true,
     moveWindowLeft: true,
@@ -161,29 +175,41 @@ export const useShortcuts = () => {
         return unsubscribe;
     }, [mapBackendToFrontend]);
 
-    const updateShortcut = useCallback(async (actionId: ShortcutActionId, keys: string[]) => {
-        setShortcuts((prev) => ({ ...prev, [actionId]: keys }));
-
+    const updateShortcut = useCallback(async (actionId: ShortcutActionId, keys: string[]): Promise<ShortcutMutationResult> => {
         const backendId = BACKEND_ID_BY_ACTION[actionId];
-        if (!backendId) return;
+        if (!backendId) {
+            return { success: false, error: 'Shortcut not found.' };
+        }
 
         try {
-            await window.electronAPI.setKeybind(backendId, keysToAccelerator(keys));
+            const result = await window.electronAPI.setKeybind(backendId, keysToAccelerator(keys));
+            if (result?.success) {
+                setShortcuts((prev) => ({ ...prev, [actionId]: keys }));
+                return { success: true };
+            }
+            return result || { success: false, error: `Failed to set keybind for ${actionId}.` };
         } catch (error) {
             console.error(`Failed to set keybind for ${actionId}:`, error);
+            return { success: false, error: `Failed to set keybind for ${actionId}.` };
         }
     }, []);
 
-    const setShortcutEnabled = useCallback(async (actionId: ShortcutActionId, enabled: boolean) => {
-        setShortcutEnabledState((prev) => ({ ...prev, [actionId]: enabled }));
-
+    const setShortcutEnabled = useCallback(async (actionId: ShortcutActionId, enabled: boolean): Promise<ShortcutMutationResult> => {
         const backendId = BACKEND_ID_BY_ACTION[actionId];
-        if (!backendId) return;
+        if (!backendId) {
+            return { success: false, error: 'Shortcut not found.' };
+        }
 
         try {
-            await window.electronAPI.setKeybindEnabled(backendId, enabled);
+            const result = await window.electronAPI.setKeybindEnabled(backendId, enabled);
+            if (result?.success) {
+                setShortcutEnabledState((prev) => ({ ...prev, [actionId]: enabled }));
+                return { success: true };
+            }
+            return result || { success: false, error: `Failed to update ${actionId}.` };
         } catch (error) {
             console.error(`Failed to set keybind enabled for ${actionId}:`, error);
+            return { success: false, error: `Failed to update ${actionId}.` };
         }
     }, []);
 

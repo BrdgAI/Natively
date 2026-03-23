@@ -16,6 +16,7 @@ const DEFAULT_CONFIG: InterviewModeConfig = {
 
 export class InterviewMemoryLedger extends EventEmitter {
   private transcript: InterviewTranscriptSegment[] = [];
+  private pausedInterviewSession = false;
 
   private state: InterviewSessionSnapshot = {
     active: false,
@@ -55,6 +56,7 @@ export class InterviewMemoryLedger extends EventEmitter {
 
   public startSession(sessionType: SessionType, config?: Partial<InterviewModeConfig>): void {
     this.transcript = [];
+    this.pausedInterviewSession = false;
     this.config = { ...DEFAULT_CONFIG, ...(config || {}) };
     this.state = {
       ...this.state,
@@ -94,25 +96,46 @@ export class InterviewMemoryLedger extends EventEmitter {
   }
 
   public exitInterviewMode(): void {
+    this.pauseInterviewMode();
+  }
+
+  public pauseInterviewMode(): void {
+    if (this.state.sessionType !== 'interview') {
+      return;
+    }
+
+    this.pausedInterviewSession = true;
     this.state = {
       ...this.state,
       active: false,
       sessionType: 'general',
-      phase: 'p1_intro',
-      phaseConfidence: 0,
-      manualOverridePhase: null,
       controlStripVisibleUntil: null,
       controlStripHint: null,
       isGenerating: false,
       isSyncing: false,
-      latestPayload: null,
-      statusMessage: 'Interview mode exited',
+      statusMessage: 'Interview mode paused',
+    };
+    this.emitUpdate();
+  }
+
+  public resumeInterviewMode(): void {
+    if (!this.pausedInterviewSession) {
+      return;
+    }
+
+    this.pausedInterviewSession = false;
+    this.state = {
+      ...this.state,
+      active: true,
+      sessionType: 'interview',
+      statusMessage: this.state.latestPayload ? 'Interview mode resumed' : 'Interview mode active',
     };
     this.emitUpdate();
   }
 
   public endSession(): void {
     this.transcript = [];
+    this.pausedInterviewSession = false;
     this.state = {
       ...this.state,
       active: false,
@@ -137,6 +160,14 @@ export class InterviewMemoryLedger extends EventEmitter {
 
   public getConfig(): InterviewModeConfig {
     return { ...this.config };
+  }
+
+  public hasPausedInterviewSession(): boolean {
+    return this.pausedInterviewSession;
+  }
+
+  public hasRetainedInterviewSession(): boolean {
+    return this.state.active || this.pausedInterviewSession;
   }
 
   public getTranscript(): InterviewTranscriptSegment[] {
@@ -167,6 +198,7 @@ export class InterviewMemoryLedger extends EventEmitter {
   }
 
   public setSessionType(sessionType: SessionType): void {
+    this.pausedInterviewSession = sessionType === 'interview' ? false : this.pausedInterviewSession;
     this.state = {
       ...this.state,
       sessionType,

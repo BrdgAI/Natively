@@ -157,8 +157,13 @@ export function initializeIpcHandlers(appState: AppState): void {
     return appState.getSessionType();
   })
 
+  safeHandle("toggle-interview-mode", async () => {
+    appState.toggleInterviewMode();
+    return { success: true };
+  })
+
   safeHandle("exit-interview-mode", async () => {
-    appState.exitInterviewMode();
+    appState.toggleInterviewMode();
     return { success: true };
   })
 

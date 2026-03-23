@@ -170,6 +170,7 @@ export class AppState {
   private view: "queue" | "solutions" = "queue"
   private isUndetectable: boolean = false
   private overlayMousePassthrough: boolean = false
+  private pausedInterviewMousePassthrough: boolean | null = null
 
   private problemInfo: {
     problem_statement: string
@@ -248,24 +249,24 @@ export class AppState {
     keybindManager.onShortcutTriggered(async (actionId) => {
       console.log(`[Main] Global shortcut triggered: ${actionId}`);
       try {
-        if (this.currentSessionType === 'interview' && this.isMeetingActive) {
-          if (actionId === 'general:process-screenshots') {
+        if (this.isMeetingActive) {
+          if (this.currentSessionType === 'interview' && actionId === 'interview:next') {
             await this.interviewOrchestrator.handleNext();
             return;
           }
-          if (actionId === 'general:capture-and-process') {
+          if (this.currentSessionType === 'interview' && actionId === 'interview:sync') {
             await this.interviewOrchestrator.handleSyncShortcut();
             return;
           }
-          if (actionId === 'interview:phase-prev') {
+          if (this.currentSessionType === 'interview' && actionId === 'interview:phase-prev') {
             this.interviewOrchestrator.shiftManualPhase(-1);
             return;
           }
-          if (actionId === 'interview:phase-next') {
+          if (this.currentSessionType === 'interview' && actionId === 'interview:phase-next') {
             this.interviewOrchestrator.shiftManualPhase(1);
             return;
           }
-          if (actionId === 'interview:scroll-up' || actionId === 'interview:scroll-down') {
+          if (this.currentSessionType === 'interview' && (actionId === 'interview:scroll-up' || actionId === 'interview:scroll-down')) {
             const action = actionId === 'interview:scroll-up' ? 'interviewScrollUp' : 'interviewScrollDown';
             BrowserWindow.getAllWindows().forEach(win => {
               if (!win.isDestroyed()) {
@@ -275,7 +276,7 @@ export class AppState {
             return;
           }
           if (actionId === 'interview:exit-mode') {
-            this.exitInterviewMode();
+            this.toggleInterviewMode();
             return;
           }
         }
@@ -837,7 +838,7 @@ export class AppState {
         confidence: segment.confidence
       });
 
-      if (this.currentSessionType === 'interview') {
+      if (this.currentSessionType === 'interview' || this.interviewOrchestrator.hasPausedSession()) {
         this.interviewOrchestrator.handleTranscript({
           speaker,
           text: segment.text,
@@ -1159,6 +1160,7 @@ export class AppState {
     const sessionType: SessionType = metadata?.sessionType === 'interview' ? 'interview' : 'general';
     this.currentSessionType = sessionType;
     this.isMeetingActive = true;
+    this.pausedInterviewMousePassthrough = null;
     this.broadcastMeetingState();
     this._broadcastToAllWindows('session-type-changed', { sessionType: this.currentSessionType });
     if (metadata) {
@@ -1225,6 +1227,7 @@ export class AppState {
     console.log('[Main] Ending Meeting...');
     this.isMeetingActive = false; // Block new data immediately
     this.broadcastMeetingState();
+    this.pausedInterviewMousePassthrough = null;
     this.setOverlayMousePassthrough(false);
 
     // 3. Stop System Audio
@@ -1484,14 +1487,54 @@ export class AppState {
     this._broadcastToAllWindows('session-type-changed', { sessionType });
   }
 
-  public exitInterviewMode(): void {
-    if (this.currentSessionType !== 'interview') return;
+  public toggleInterviewMode(): void {
+    if (!this.isMeetingActive) {
+      return;
+    }
+
+    if (this.currentSessionType === 'interview') {
+      this.pauseInterviewMode();
+      return;
+    }
+
+    if (this.interviewOrchestrator.hasPausedSession()) {
+      this.resumeInterviewMode();
+    }
+  }
+
+  public pauseInterviewMode(): void {
+    if (this.currentSessionType !== 'interview' || !this.isMeetingActive) {
+      return;
+    }
+
+    this.pausedInterviewMousePassthrough = this.overlayMousePassthrough;
     this.currentSessionType = 'general';
-    this.interviewOrchestrator.exitInterviewMode();
-    this.setOverlayMousePassthrough(false);
+    this.interviewOrchestrator.pauseInterviewMode();
     this.windowHelper.syncOverlayMode();
+    this.windowHelper.setWindowMode('overlay', true);
     this.getWindowHelper().getOverlayWindow()?.webContents.send('session-reset');
     this._broadcastToAllWindows('session-type-changed', { sessionType: 'general' });
+  }
+
+  public resumeInterviewMode(): void {
+    if (!this.isMeetingActive || !this.interviewOrchestrator.hasPausedSession()) {
+      return;
+    }
+
+    this.currentSessionType = 'interview';
+    this.interviewOrchestrator.resumeInterviewMode();
+    this.windowHelper.syncOverlayMode();
+    this.windowHelper.setWindowMode('overlay', true);
+
+    if (this.pausedInterviewMousePassthrough !== null) {
+      this.setOverlayMousePassthrough(this.pausedInterviewMousePassthrough);
+    }
+
+    this._broadcastToAllWindows('session-type-changed', { sessionType: 'interview' });
+  }
+
+  public exitInterviewMode(): void {
+    this.pauseInterviewMode();
   }
 
   public getThemeManager(): ThemeManager {

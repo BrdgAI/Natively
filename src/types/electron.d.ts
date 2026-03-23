@@ -113,6 +113,7 @@ export interface ElectronAPI {
   getSttLanguage: () => Promise<string>
   getAiResponseLanguage: () => Promise<string>
   getSessionType: () => Promise<SessionType>
+  toggleInterviewMode: () => Promise<{ success: boolean }>
   exitInterviewMode: () => Promise<{ success: boolean }>
   getInterviewState: () => Promise<InterviewSessionSnapshot>
   interviewNext: () => Promise<InterviewSessionSnapshot>
@@ -259,8 +260,8 @@ export interface ElectronAPI {
 
   // Keybind Management
   getKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string; enabled: boolean; defaultEnabled: boolean }>>
-  setKeybind: (id: string, accelerator: string) => Promise<boolean>
-  setKeybindEnabled: (id: string, enabled: boolean) => Promise<boolean>
+  setKeybind: (id: string, accelerator: string) => Promise<{ success: boolean; error?: string; conflictWithId?: string; conflictWithLabel?: string }>
+  setKeybindEnabled: (id: string, enabled: boolean) => Promise<{ success: boolean; error?: string; conflictWithId?: string; conflictWithLabel?: string }>
   resetKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string; enabled: boolean; defaultEnabled: boolean }>>
   onKeybindsUpdate: (callback: (keybinds: Array<any>) => void) => () => void
   onGlobalShortcut: (callback: (data: { action: string }) => void) => () => void

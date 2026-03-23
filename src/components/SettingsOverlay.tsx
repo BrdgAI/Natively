@@ -382,6 +382,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     }, [isOpen, initialTab]);
     
     const { shortcuts, shortcutEnabled, updateShortcut, setShortcutEnabled, resetShortcuts } = useShortcuts();
+    const [shortcutErrors, setShortcutErrors] = useState<Partial<Record<ShortcutActionId, string>>>({});
     const [isUndetectable, setIsUndetectable] = useState(false);
     const [isMousePassthrough, setIsMousePassthrough] = useState(false);
     const [disguiseMode, setDisguiseMode] = useState<'terminal' | 'settings' | 'activity' | 'none'>('none');
@@ -1195,11 +1196,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         {
             title: 'Interview',
             items: [
-                { id: 'interviewPhasePrev', label: 'Phase Previous', icon: <ArrowLeft size={14} /> },
-                { id: 'interviewPhaseNext', label: 'Phase Next', icon: <ArrowRight size={14} /> },
+                { id: 'interviewNext', label: 'Next', icon: <ArrowRight size={14} /> },
+                { id: 'interviewSync', label: 'Sync', icon: <Zap size={14} /> },
                 { id: 'interviewScrollUp', label: 'Main Scroll Up', icon: <ArrowUp size={14} /> },
                 { id: 'interviewScrollDown', label: 'Main Scroll Down', icon: <ArrowDown size={14} /> },
-                { id: 'interviewExitMode', label: 'Exit Interview Mode', icon: <LogOut size={14} /> }
+                { id: 'interviewPhasePrev', label: 'Phase Previous', icon: <ArrowLeft size={14} /> },
+                { id: 'interviewPhaseNext', label: 'Phase Next', icon: <ArrowRight size={14} /> },
+                { id: 'interviewExitMode', label: 'Leave / Resume Interview', icon: <LogOut size={14} /> }
             ]
         },
         {
@@ -1213,30 +1216,62 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         }
     ];
 
+    const handleShortcutSave = async (actionId: ShortcutActionId, keys: string[]) => {
+        const result = await updateShortcut(actionId, keys);
+        setShortcutErrors((prev) => ({
+            ...prev,
+            [actionId]: result.success ? undefined : result.error || 'Failed to save shortcut.',
+        }));
+    };
+
+    const handleShortcutToggle = async (actionId: ShortcutActionId, enabled: boolean) => {
+        const result = await setShortcutEnabled(actionId, enabled);
+        setShortcutErrors((prev) => ({
+            ...prev,
+            [actionId]: result.success ? undefined : result.error || 'Failed to update shortcut.',
+        }));
+    };
+
+    const handleResetShortcuts = async () => {
+        await resetShortcuts();
+        setShortcutErrors({});
+    };
+
     const renderShortcutRow = (item: { id: ShortcutActionId; label: string; icon: React.ReactNode }) => {
         const enabled = shortcutEnabled[item.id];
+        const error = shortcutErrors[item.id];
 
         return (
-            <div key={item.id} className={`flex items-center gap-4 py-1.5 group transition-opacity ${enabled ? '' : 'opacity-55'}`}>
-                <button
-                    onClick={() => setShortcutEnabled(item.id, !enabled)}
-                    className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${enabled ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                    title={enabled ? 'Disable shortcut' : 'Enable shortcut'}
-                    aria-pressed={enabled}
-                >
-                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                </button>
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center shrink-0">{item.icon}</span>
-                    <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors truncate">{item.label}</span>
+            <div key={item.id} className={`py-1.5 transition-opacity ${enabled ? '' : 'opacity-55'}`}>
+                <div className="group flex items-center gap-4">
+                    <button
+                        onClick={() => handleShortcutToggle(item.id, !enabled)}
+                        className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${enabled ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                        title={enabled ? 'Disable shortcut' : 'Enable shortcut'}
+                        aria-pressed={enabled}
+                    >
+                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center shrink-0">{item.icon}</span>
+                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors truncate">{item.label}</span>
+                    </div>
+                    <div className="shrink-0">
+                        <KeyRecorder
+                            currentKeys={shortcuts[item.id]}
+                            onSave={(keys) => {
+                                void handleShortcutSave(item.id, keys);
+                            }}
+                            disabled={!enabled}
+                        />
+                    </div>
                 </div>
-                <div className="shrink-0">
-                    <KeyRecorder
-                        currentKeys={shortcuts[item.id]}
-                        onSave={(keys) => updateShortcut(item.id, keys)}
-                        disabled={!enabled}
-                    />
-                </div>
+                {error && (
+                    <div className="ml-[60px] mt-2 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-xs text-red-500">
+                        <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                        <span>{error}</span>
+                    </div>
+                )}
             </div>
         );
     };
@@ -2606,7 +2641,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                             <p className="text-xs text-text-secondary">Turn off any shortcut you do not want while keeping its saved key combo for later.</p>
                                         </div>
                                         <button
-                                            onClick={resetShortcuts}
+                                            onClick={() => {
+                                                void handleResetShortcuts();
+                                            }}
                                             className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-border-subtle bg-bg-subtle/30 hover:bg-bg-subtle hover:border-green-500/30 transition-all duration-200 text-xs font-medium text-text-secondary hover:text-green-500 active:scale-95 mt-1"
                                         >
                                             <RotateCcw size={13} strokeWidth={2.5} />
@@ -2618,6 +2655,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                         {shortcutSections.map((section) => (
                                             <div key={section.title}>
                                                 <h4 className="text-sm font-bold text-text-primary mb-3">{section.title}</h4>
+                                                {section.title === 'Interview' && (
+                                                    <div className="mb-3 rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-xs leading-6 text-text-secondary">
+                                                        Interview shortcuts only apply during an active interview meeting. Leave / Resume Interview returns to the same interview overlay during that meeting without ending it.
+                                                    </div>
+                                                )}
                                                 <div className="space-y-1">
                                                     {section.items.map(renderShortcutRow)}
                                                 </div>
