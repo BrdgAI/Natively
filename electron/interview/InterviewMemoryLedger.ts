@@ -6,8 +6,11 @@ import {
   InterviewModeConfig,
   InterviewOverlayPayload,
   InterviewPhase,
+  InterviewPhaseHandoff,
+  InterviewPhaseHandoffMap,
   InterviewPhaseDocument,
   InterviewPhaseDocumentMap,
+  InterviewRoutingMode,
   InterviewScreenAnalysis,
   InterviewSessionSnapshot,
   InterviewTranscriptSegment,
@@ -26,6 +29,7 @@ export class InterviewMemoryLedger extends EventEmitter {
   private state: InterviewSessionSnapshot = {
     active: false,
     sessionType: 'general',
+    routingMode: 'manual',
     phase: 'p1_intro',
     phaseConfidence: 0,
     manualOverridePhase: null,
@@ -49,6 +53,7 @@ export class InterviewMemoryLedger extends EventEmitter {
     quickQuestions: [],
     requirementChanges: [],
     activeFollowUp: null,
+    phaseHandoffs: createEmptyPhaseHandoffs(),
     phaseDocuments: createEmptyPhaseDocuments(),
     lastTranscriptAt: null,
     lastScreenshotAt: null,
@@ -68,11 +73,13 @@ export class InterviewMemoryLedger extends EventEmitter {
     this.config = { ...DEFAULT_CONFIG, ...(config || {}) };
 
     const phaseDocuments = createEmptyPhaseDocuments();
+    const phaseHandoffs = createEmptyPhaseHandoffs();
 
     this.state = {
       ...this.state,
       active: sessionType === 'interview',
       sessionType,
+      routingMode: 'manual',
       phase: sessionType === 'interview' ? 'p2_clarify' : 'p1_intro',
       phaseConfidence: sessionType === 'interview' ? 0.4 : 0,
       manualOverridePhase: null,
@@ -96,6 +103,7 @@ export class InterviewMemoryLedger extends EventEmitter {
       quickQuestions: [],
       requirementChanges: [],
       activeFollowUp: null,
+      phaseHandoffs,
       phaseDocuments,
       lastTranscriptAt: null,
       lastScreenshotAt: null,
@@ -155,6 +163,7 @@ export class InterviewMemoryLedger extends EventEmitter {
       ...this.state,
       active: false,
       sessionType: 'general',
+      routingMode: 'manual',
       phase: 'p1_intro',
       phaseConfidence: 0,
       manualOverridePhase: null,
@@ -176,6 +185,7 @@ export class InterviewMemoryLedger extends EventEmitter {
       quickQuestions: [],
       requirementChanges: [],
       activeFollowUp: null,
+      phaseHandoffs: createEmptyPhaseHandoffs(),
       phaseDocuments: createEmptyPhaseDocuments(),
       lastScreenshotPath: null,
       lastScreenshotPreview: null,
@@ -247,6 +257,14 @@ export class InterviewMemoryLedger extends EventEmitter {
       phase,
       phaseConfidence: confidence,
     });
+    this.emitUpdate();
+  }
+
+  public setRoutingMode(routingMode: InterviewRoutingMode): void {
+    this.state = {
+      ...this.state,
+      routingMode,
+    };
     this.emitUpdate();
   }
 
@@ -421,7 +439,8 @@ export class InterviewMemoryLedger extends EventEmitter {
   public applyGeneratedPayload(
     payload: InterviewOverlayPayload,
     phaseDocument: InterviewPhaseDocument,
-    clarificationItems?: InterviewClarificationItem[]
+    clarificationItems?: InterviewClarificationItem[],
+    phaseHandoff?: InterviewPhaseHandoff
   ): void {
     const nextCode: InterviewCodeSnapshot | null = payload.codePanel
       ? {
@@ -437,6 +456,12 @@ export class InterviewMemoryLedger extends EventEmitter {
     const phaseDocuments = {
       ...this.state.phaseDocuments,
       [payload.phase]: clonePhaseDocument(phaseDocument),
+    };
+    const phaseHandoffs = {
+      ...this.state.phaseHandoffs,
+      [payload.phase]: phaseHandoff
+        ? clonePhaseHandoff(phaseHandoff)
+        : this.state.phaseHandoffs[payload.phase],
     };
 
     const nextClarificationItems = clarificationItems
@@ -466,6 +491,7 @@ export class InterviewMemoryLedger extends EventEmitter {
             derivedFrom: this.state.activeFollowUp?.derivedFrom || 'transcript',
           }
         : this.state.activeFollowUp,
+      phaseHandoffs,
       currentCode: nextCode,
       phaseDocuments,
       statusMessage: 'Interview guidance ready',
@@ -523,6 +549,7 @@ export class InterviewMemoryLedger extends EventEmitter {
       quickQuestions: [...this.state.quickQuestions],
       requirementChanges: [...this.state.requirementChanges],
       activeFollowUp: this.state.activeFollowUp ? { ...this.state.activeFollowUp } : null,
+      phaseHandoffs: clonePhaseHandoffs(this.state.phaseHandoffs),
       phaseDocuments: clonePhaseDocuments(this.state.phaseDocuments),
       controlStripVisibleUntil: this.state.controlStripVisibleUntil,
       controlStripHint: this.state.controlStripHint,
@@ -587,6 +614,16 @@ function createEmptyPhaseDocuments(): InterviewPhaseDocumentMap {
   };
 }
 
+function createEmptyPhaseHandoffs(): InterviewPhaseHandoffMap {
+  return {
+    p2_clarify: createEmptyPhaseHandoff(),
+    p3_approach: createEmptyPhaseHandoff(),
+    p4_code: createEmptyPhaseHandoff(),
+    p5_test: createEmptyPhaseHandoff(),
+    p6_follow_up: createEmptyPhaseHandoff(),
+  };
+}
+
 function createEmptyPhaseDocument(phase: RenderableInterviewPhase): InterviewPhaseDocument {
   return {
     phase,
@@ -617,6 +654,15 @@ function createEmptyPhaseDocument(phase: RenderableInterviewPhase): InterviewPha
   };
 }
 
+function createEmptyPhaseHandoff(): InterviewPhaseHandoff {
+  return {
+    summaryLines: [],
+    confirmedSpecLines: [],
+    openQuestions: [],
+    updatedAt: null,
+  };
+}
+
 function clonePhaseDocuments(documents: InterviewPhaseDocumentMap): InterviewPhaseDocumentMap {
   return {
     p2_clarify: clonePhaseDocument(documents.p2_clarify),
@@ -624,6 +670,16 @@ function clonePhaseDocuments(documents: InterviewPhaseDocumentMap): InterviewPha
     p4_code: clonePhaseDocument(documents.p4_code),
     p5_test: clonePhaseDocument(documents.p5_test),
     p6_follow_up: clonePhaseDocument(documents.p6_follow_up),
+  };
+}
+
+function clonePhaseHandoffs(handoffs: InterviewPhaseHandoffMap): InterviewPhaseHandoffMap {
+  return {
+    p2_clarify: clonePhaseHandoff(handoffs.p2_clarify),
+    p3_approach: clonePhaseHandoff(handoffs.p3_approach),
+    p4_code: clonePhaseHandoff(handoffs.p4_code),
+    p5_test: clonePhaseHandoff(handoffs.p5_test),
+    p6_follow_up: clonePhaseHandoff(handoffs.p6_follow_up),
   };
 }
 
@@ -679,6 +735,15 @@ function cloneClarificationItem(item: InterviewClarificationItem): InterviewClar
     answer: item.answer,
     revision: item.revision,
     replacementReason: item.replacementReason,
+  };
+}
+
+function clonePhaseHandoff(handoff: InterviewPhaseHandoff): InterviewPhaseHandoff {
+  return {
+    summaryLines: [...handoff.summaryLines],
+    confirmedSpecLines: [...handoff.confirmedSpecLines],
+    openQuestions: [...handoff.openQuestions],
+    updatedAt: handoff.updatedAt,
   };
 }
 

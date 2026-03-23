@@ -7,7 +7,7 @@ import InterviewMainPanel from './InterviewMainPanel'
 import InterviewNotesRail from './InterviewNotesRail'
 import InterviewQuickAnswersPanel from './InterviewQuickAnswersPanel'
 import InterviewTopStrip from './InterviewTopStrip'
-import type { InterviewPhaseDocumentMap, InterviewSessionSnapshot, RenderableInterviewPhase } from '../../types/interview'
+import type { InterviewPhaseDocumentMap, InterviewPhaseHandoffMap, InterviewSessionSnapshot, RenderableInterviewPhase } from '../../types/interview'
 
 interface InterviewOverlayProps {
   overlayOpacity: number
@@ -22,9 +22,18 @@ const EMPTY_PHASE_DOCUMENTS: InterviewPhaseDocumentMap = {
   p6_follow_up: createEmptyPhaseDocument('p6_follow_up'),
 }
 
+const EMPTY_PHASE_HANDOFFS: InterviewPhaseHandoffMap = {
+  p2_clarify: createEmptyPhaseHandoff(),
+  p3_approach: createEmptyPhaseHandoff(),
+  p4_code: createEmptyPhaseHandoff(),
+  p5_test: createEmptyPhaseHandoff(),
+  p6_follow_up: createEmptyPhaseHandoff(),
+}
+
 const EMPTY_SNAPSHOT: InterviewSessionSnapshot = {
   active: true,
   sessionType: 'interview',
+  routingMode: 'manual',
   phase: 'p2_clarify',
   phaseConfidence: 0,
   manualOverridePhase: null,
@@ -48,6 +57,7 @@ const EMPTY_SNAPSHOT: InterviewSessionSnapshot = {
   quickQuestions: [],
   requirementChanges: [],
   activeFollowUp: null,
+  phaseHandoffs: EMPTY_PHASE_HANDOFFS,
   phaseDocuments: EMPTY_PHASE_DOCUMENTS,
   lastTranscriptAt: null,
   lastScreenshotAt: null,
@@ -221,6 +231,7 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
             phase={snapshot.phase}
             phaseConfidence={snapshot.phaseConfidence}
             manualOverridePhase={snapshot.manualOverridePhase}
+            routingMode={snapshot.routingMode}
             statusMessage={snapshot.statusMessage}
             lastTranscriptSnippet={snapshot.lastTranscriptSnippet}
             lastTranscriptAt={snapshot.lastTranscriptAt}
@@ -298,6 +309,15 @@ function createEmptyPhaseDocument(phase: RenderableInterviewPhase) {
     },
     scrollOffset: 0,
     lastUpdatedAt: null,
+  }
+}
+
+function createEmptyPhaseHandoff() {
+  return {
+    summaryLines: [],
+    confirmedSpecLines: [],
+    openQuestions: [],
+    updatedAt: null,
   }
 }
 

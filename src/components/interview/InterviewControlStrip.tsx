@@ -30,7 +30,7 @@ const InterviewControlStrip: React.FC<InterviewControlStripProps> = ({
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-[12px] font-semibold text-[#2a221c]">
-          {hint || `Sync again to cycle phase. Current target: ${formatPhase(activePhase)}.`}
+          {hint || `Current target: ${formatPhase(activePhase)}. Use Prev or Next to switch phases.`}
         </div>
 
         {mousePassthrough ? (

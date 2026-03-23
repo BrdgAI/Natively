@@ -2,12 +2,13 @@ import React from 'react'
 import { ArrowRight, Monitor, Power, ScanLine } from 'lucide-react'
 import InterviewPhaseFlow from './InterviewPhaseFlow'
 import InterviewUpdateIndicator from './InterviewUpdateIndicator'
-import type { InterviewPhase, InterviewUpdateSummary } from '../../types/interview'
+import type { InterviewPhase, InterviewRoutingMode, InterviewUpdateSummary } from '../../types/interview'
 
 interface InterviewTopStripProps {
   phase: InterviewPhase
   phaseConfidence: number
   manualOverridePhase: InterviewPhase | null
+  routingMode: InterviewRoutingMode
   statusMessage: string | null
   lastTranscriptSnippet: string
   lastTranscriptAt: number | null
@@ -27,6 +28,7 @@ const InterviewTopStrip: React.FC<InterviewTopStripProps> = ({
   phase,
   phaseConfidence,
   manualOverridePhase,
+  routingMode,
   statusMessage,
   lastTranscriptSnippet,
   lastTranscriptAt,
@@ -58,6 +60,7 @@ const InterviewTopStrip: React.FC<InterviewTopStripProps> = ({
 
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#65584e]">
             <MetaPill label={`Confidence ${Math.round(phaseConfidence * 100)}%`} />
+            <MetaPill label={`Routing ${routingMode}`} />
             <MetaPill label={`Transcript ${formatFreshness(lastTranscriptAt, now)}`} />
             <MetaPill label={`Screen ${formatFreshness(lastScreenshotAt, now)}`} />
             <MetaPill label={textModelLabel} />

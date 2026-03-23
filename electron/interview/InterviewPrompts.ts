@@ -3,6 +3,7 @@ import {
   InterviewClarificationItem,
   InterviewGeneratorContext,
   InterviewPhase,
+  InterviewPhaseHandoff,
   InterviewSessionSnapshot,
   RenderableInterviewPhase,
 } from './types';
@@ -97,7 +98,10 @@ function buildRuntimeContext(
   const phaseDocument = phase ? snapshot.phaseDocuments[phase] : null;
   const screenAnalysis = context.screenAnalysis;
 
-  return `Current known problem:
+  return `Routing mode:
+${snapshot.routingMode}
+
+Current known problem:
 ${snapshot.problemStatement || '[not confirmed yet]'}
 
 Known constraints:
@@ -135,6 +139,9 @@ ${phaseDocument ? formatAnchor(phaseDocument.anchor) : '[no phase anchor yet]'}
 
 Current phase main sections:
 ${phaseDocument ? formatMainSections(phaseDocument.mainSections) : '- none'}
+
+Relevant phase handoffs:
+${phase ? formatRelevantPhaseHandoffs(snapshot, phase) : '- none'}
 
 Latest screen analysis:
 ${formatScreenAnalysis(screenAnalysis)}
@@ -243,6 +250,55 @@ function formatScreenAnalysis(screenAnalysis: InterviewGeneratorContext['screenA
   return lines.length > 0 ? lines.map((line) => `- ${line}`).join('\n') : '- none';
 }
 
+function formatRelevantPhaseHandoffs(
+  snapshot: InterviewSessionSnapshot,
+  phase: RenderableInterviewPhase
+): string {
+  const relevantPhases = getRelevantHandoffPhases(phase);
+  const blocks = relevantPhases
+    .map((item) => {
+      const handoff = snapshot.phaseHandoffs[item];
+      return formatPhaseHandoff(item, handoff);
+    })
+    .filter(Boolean);
+
+  return blocks.length > 0 ? blocks.join('\n') : '- none';
+}
+
+function getRelevantHandoffPhases(phase: RenderableInterviewPhase): RenderableInterviewPhase[] {
+  switch (phase) {
+    case 'p2_clarify':
+      return ['p2_clarify'];
+    case 'p3_approach':
+      return ['p2_clarify', 'p3_approach'];
+    case 'p4_code':
+      return ['p2_clarify', 'p3_approach', 'p4_code'];
+    case 'p5_test':
+      return ['p2_clarify', 'p3_approach', 'p4_code', 'p5_test'];
+    case 'p6_follow_up':
+      return ['p2_clarify', 'p3_approach', 'p4_code', 'p5_test', 'p6_follow_up'];
+  }
+}
+
+function formatPhaseHandoff(phase: RenderableInterviewPhase, handoff: InterviewPhaseHandoff): string {
+  const hasContent = handoff.summaryLines.length > 0 || handoff.confirmedSpecLines.length > 0 || handoff.openQuestions.length > 0;
+  if (!hasContent) {
+    return '';
+  }
+
+  const lines = [`- ${formatPhaseLabel(phase)} handoff:`];
+  if (handoff.summaryLines.length > 0) {
+    lines.push(...handoff.summaryLines.map((item) => `  - summary: ${item}`));
+  }
+  if (handoff.confirmedSpecLines.length > 0) {
+    lines.push(...handoff.confirmedSpecLines.map((item) => `  - spec: ${item}`));
+  }
+  if (handoff.openQuestions.length > 0) {
+    lines.push(...handoff.openQuestions.map((item) => `  - open: ${item}`));
+  }
+  return lines.join('\n');
+}
+
 function formatTranscript(context: InterviewGeneratorContext): string {
   const transcript = context.recentTranscript.slice(-12);
   if (transcript.length === 0) {
@@ -253,4 +309,19 @@ function formatTranscript(context: InterviewGeneratorContext): string {
 
 function normalizePhase(phase: InterviewPhase): RenderableInterviewPhase {
   return phase === 'p1_intro' ? 'p2_clarify' : phase;
+}
+
+function formatPhaseLabel(phase: RenderableInterviewPhase): string {
+  switch (phase) {
+    case 'p2_clarify':
+      return 'Clarify';
+    case 'p3_approach':
+      return 'Approach';
+    case 'p4_code':
+      return 'Code';
+    case 'p5_test':
+      return 'Test';
+    case 'p6_follow_up':
+      return 'Follow-up';
+  }
 }

@@ -10,6 +10,8 @@ export type InterviewPhase =
 
 export type RenderableInterviewPhase = Exclude<InterviewPhase, 'p1_intro'>
 
+export type InterviewRoutingMode = 'manual' | 'auto'
+
 export type InterviewCodePanelMode =
   | 'skeleton'
   | 'full'
@@ -98,6 +100,13 @@ export interface InterviewFollowUpState {
   derivedFrom: 'transcript' | 'screen' | 'manual'
 }
 
+export interface InterviewPhaseHandoff {
+  summaryLines: string[]
+  confirmedSpecLines: string[]
+  openQuestions: string[]
+  updatedAt: number | null
+}
+
 export interface InterviewPhaseDocument {
   phase: RenderableInterviewPhase
   anchor: InterviewAnchorBlock
@@ -111,6 +120,7 @@ export interface InterviewPhaseDocument {
 }
 
 export type InterviewPhaseDocumentMap = Record<RenderableInterviewPhase, InterviewPhaseDocument>
+export type InterviewPhaseHandoffMap = Record<RenderableInterviewPhase, InterviewPhaseHandoff>
 
 export interface InterviewOverlayPayload {
   phase: RenderableInterviewPhase
@@ -149,6 +159,7 @@ export interface InterviewCodeSnapshot {
 export interface InterviewSessionSnapshot {
   active: boolean
   sessionType: SessionType
+  routingMode: InterviewRoutingMode
   phase: InterviewPhase
   phaseConfidence: number
   manualOverridePhase: InterviewPhase | null
@@ -172,6 +183,7 @@ export interface InterviewSessionSnapshot {
   quickQuestions: string[]
   requirementChanges: string[]
   activeFollowUp: InterviewFollowUpState | null
+  phaseHandoffs: InterviewPhaseHandoffMap
   phaseDocuments: InterviewPhaseDocumentMap
   lastTranscriptAt: number | null
   lastScreenshotAt: number | null
