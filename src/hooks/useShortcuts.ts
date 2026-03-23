@@ -9,6 +9,10 @@ export interface ShortcutConfig {
     answer: string[];
     scrollUp: string[];
     scrollDown: string[];
+    reservedShortcut1: string[];
+    reservedShortcut2: string[];
+    reservedShortcut3: string[];
+    reservedShortcut4: string[];
     interviewNext: string[];
     interviewSync: string[];
     interviewPhasePrev: string[];
@@ -56,6 +60,10 @@ const BACKEND_ID_BY_ACTION: Record<ShortcutActionId, string> = {
     answer: 'chat:answer',
     scrollUp: 'chat:scrollUp',
     scrollDown: 'chat:scrollDown',
+    reservedShortcut1: 'reserved:shortcut-1',
+    reservedShortcut2: 'reserved:shortcut-2',
+    reservedShortcut3: 'reserved:shortcut-3',
+    reservedShortcut4: 'reserved:shortcut-4',
     interviewNext: 'interview:next',
     interviewSync: 'interview:sync',
     interviewPhasePrev: 'interview:phase-prev',
@@ -88,6 +96,10 @@ export const DEFAULT_SHORTCUTS: ShortcutConfig = {
     answer: ['⌘', '5'],
     scrollUp: ['⌘', '↑'],
     scrollDown: ['⌘', '↓'],
+    reservedShortcut1: [],
+    reservedShortcut2: [],
+    reservedShortcut3: [],
+    reservedShortcut4: [],
     interviewNext: ['⌘', 'Enter'],
     interviewSync: ['⌘', '⇧', 'Enter'],
     interviewPhasePrev: ['⌘', '⇧', '←'],
@@ -116,6 +128,10 @@ export const DEFAULT_SHORTCUT_ENABLED: ShortcutEnabledConfig = {
     answer: true,
     scrollUp: true,
     scrollDown: true,
+    reservedShortcut1: true,
+    reservedShortcut2: true,
+    reservedShortcut3: true,
+    reservedShortcut4: true,
     interviewNext: true,
     interviewSync: true,
     interviewPhasePrev: false,

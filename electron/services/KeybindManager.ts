@@ -72,6 +72,12 @@ export const DEFAULT_KEYBINDS: KeybindConfig[] = [
     { id: 'chat:scrollUp', label: 'Scroll Up', accelerator: 'CommandOrControl+Up', isGlobal: true, defaultAccelerator: 'CommandOrControl+Up', enabled: true, defaultEnabled: true },
     { id: 'chat:scrollDown', label: 'Scroll Down', accelerator: 'CommandOrControl+Down', isGlobal: true, defaultAccelerator: 'CommandOrControl+Down', enabled: true, defaultEnabled: true },
 
+    // Reserved - Global shortcuts intentionally captured as no-ops
+    { id: 'reserved:shortcut-1', label: 'Reserved Shortcut 1', accelerator: '', isGlobal: true, defaultAccelerator: '', enabled: true, defaultEnabled: true },
+    { id: 'reserved:shortcut-2', label: 'Reserved Shortcut 2', accelerator: '', isGlobal: true, defaultAccelerator: '', enabled: true, defaultEnabled: true },
+    { id: 'reserved:shortcut-3', label: 'Reserved Shortcut 3', accelerator: '', isGlobal: true, defaultAccelerator: '', enabled: true, defaultEnabled: true },
+    { id: 'reserved:shortcut-4', label: 'Reserved Shortcut 4', accelerator: '', isGlobal: true, defaultAccelerator: '', enabled: true, defaultEnabled: true },
+
     // Window Movement - Global shortcuts (stealth window positioning)
     { id: 'window:move-up', label: 'Move Window Up', accelerator: 'CommandOrControl+Up', isGlobal: true, defaultAccelerator: 'CommandOrControl+Up', enabled: true, defaultEnabled: true },
     { id: 'window:move-down', label: 'Move Window Down', accelerator: 'CommandOrControl+Down', isGlobal: true, defaultAccelerator: 'CommandOrControl+Down', enabled: true, defaultEnabled: true },

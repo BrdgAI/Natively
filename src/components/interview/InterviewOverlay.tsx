@@ -8,6 +8,7 @@ import InterviewNotesRail from './InterviewNotesRail'
 import InterviewQuickAnswersPanel from './InterviewQuickAnswersPanel'
 import InterviewTopStrip from './InterviewTopStrip'
 import type { InterviewPhaseDocumentMap, InterviewPhaseHandoffMap, InterviewSessionSnapshot, RenderableInterviewPhase } from '../../types/interview'
+import { useShortcuts } from '../../hooks/useShortcuts'
 
 interface InterviewOverlayProps {
   overlayOpacity: number
@@ -79,6 +80,24 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
   const [sttLabel, setSttLabel] = useState('STT from settings')
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollTimerRef = useRef<number | null>(null)
+  const { isShortcutPressed } = useShortcuts()
+  const isReservedShortcutPressed = (event: KeyboardEvent | React.KeyboardEvent) => {
+    return isShortcutPressed(event, 'reservedShortcut1')
+      || isShortcutPressed(event, 'reservedShortcut2')
+      || isShortcutPressed(event, 'reservedShortcut3')
+      || isShortcutPressed(event, 'reservedShortcut4')
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isReservedShortcutPressed(event)) {
+        event.preventDefault()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isShortcutPressed])
 
   useEffect(() => {
     let mounted = true

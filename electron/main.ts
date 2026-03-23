@@ -129,6 +129,13 @@ interface ScreenshotCaptureSession {
   restoreWithoutFocus: boolean;
 }
 
+const RESERVED_SHORTCUT_IDS = new Set([
+  'reserved:shortcut-1',
+  'reserved:shortcut-2',
+  'reserved:shortcut-3',
+  'reserved:shortcut-4',
+]);
+
 // Premium: Knowledge modules loaded conditionally
 let KnowledgeOrchestratorClass: any = null;
 let KnowledgeDatabaseManagerClass: any = null;
@@ -249,6 +256,10 @@ export class AppState {
     keybindManager.onShortcutTriggered(async (actionId) => {
       console.log(`[Main] Global shortcut triggered: ${actionId}`);
       try {
+        if (RESERVED_SHORTCUT_IDS.has(actionId)) {
+          return;
+        }
+
         if (this.isMeetingActive) {
           if (this.currentSessionType === 'interview' && actionId === 'interview:next') {
             await this.interviewOrchestrator.handleNext();

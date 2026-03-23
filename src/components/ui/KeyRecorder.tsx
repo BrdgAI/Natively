@@ -12,6 +12,7 @@ export const KeyRecorder: React.FC<KeyRecorderProps> = ({ currentKeys, onSave, c
     const [isRecording, setIsRecording] = useState(false);
     const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
     const inputRef = useRef<HTMLDivElement>(null);
+    const hasAssignedKeys = currentKeys.length > 0;
 
     useEffect(() => {
         if (isRecording && inputRef.current) {
@@ -80,19 +81,25 @@ export const KeyRecorder: React.FC<KeyRecorderProps> = ({ currentKeys, onSave, c
                 </div>
             ) : (
                 <div className="flex items-center gap-1">
-                    {currentKeys.map((k, i) => {
-                        let displayKey = k;
-                        if (k === 'ArrowUp') displayKey = '↑';
-                        else if (k === 'ArrowDown') displayKey = '↓';
-                        else if (k === 'ArrowLeft') displayKey = '←';
-                        else if (k === 'ArrowRight') displayKey = '→';
+                    {hasAssignedKeys ? (
+                        currentKeys.map((k, i) => {
+                            let displayKey = k;
+                            if (k === 'ArrowUp') displayKey = '↑';
+                            else if (k === 'ArrowDown') displayKey = '↓';
+                            else if (k === 'ArrowLeft') displayKey = '←';
+                            else if (k === 'ArrowRight') displayKey = '→';
 
-                        return (
-                            <span key={i} className={`bg-bg-input text-text-secondary h-6 min-w-[26px] px-1.5 rounded-md text-xs font-sans flex items-center justify-center shadow-sm border border-border-subtle transition-colors ${disabled ? '' : 'group-hover:border-text-tertiary'}`}>
-                                {displayKey}
-                            </span>
-                        );
-                    })}
+                            return (
+                                <span key={i} className={`bg-bg-input text-text-secondary h-6 min-w-[26px] px-1.5 rounded-md text-xs font-sans flex items-center justify-center shadow-sm border border-border-subtle transition-colors ${disabled ? '' : 'group-hover:border-text-tertiary'}`}>
+                                    {displayKey}
+                                </span>
+                            );
+                        })
+                    ) : (
+                        <span className={`bg-bg-input text-text-tertiary h-6 px-2.5 rounded-md text-xs font-sans flex items-center justify-center shadow-sm border border-dashed border-border-subtle transition-colors ${disabled ? '' : 'group-hover:border-text-tertiary group-hover:text-text-secondary'}`}>
+                            {disabled ? 'Unassigned' : 'Set shortcut'}
+                        </span>
+                    )}
                 </div>
             )}
         </div>

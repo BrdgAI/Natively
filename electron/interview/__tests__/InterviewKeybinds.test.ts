@@ -11,6 +11,12 @@ test('interview defaults include dedicated next, sync, phase, scroll, and leave/
 
   assert.equal(ids.get('general:process-screenshots')?.accelerator, 'CommandOrControl+Alt+Enter');
   assert.equal(ids.get('general:capture-and-process')?.accelerator, 'CommandOrControl+Alt+Shift+Enter');
+  assert.equal(ids.get('reserved:shortcut-1')?.isGlobal, true);
+  assert.equal(ids.get('reserved:shortcut-1')?.accelerator, '');
+  assert.equal(ids.get('reserved:shortcut-1')?.enabled, true);
+  assert.equal(ids.get('reserved:shortcut-2')?.accelerator, '');
+  assert.equal(ids.get('reserved:shortcut-3')?.accelerator, '');
+  assert.equal(ids.get('reserved:shortcut-4')?.accelerator, '');
   assert.equal(ids.get('interview:next')?.accelerator, 'CommandOrControl+Enter');
   assert.equal(ids.get('interview:sync')?.accelerator, 'CommandOrControl+Shift+Enter');
   assert.equal(ids.get('interview:phase-prev')?.enabled, false);
@@ -59,4 +65,21 @@ test('duplicate validation blocks conflicting shortcuts and preserves allowed sh
   );
 
   assert.equal(allowed.success, true);
+
+  const reservedAllowed = validateKeybindMutation(
+    DEFAULT_KEYBINDS.map((item) => ({ ...item })),
+    'reserved:shortcut-1',
+    { accelerator: 'CommandOrControl+9' }
+  );
+
+  assert.equal(reservedAllowed.success, true);
+
+  const reservedConflict = validateKeybindMutation(
+    DEFAULT_KEYBINDS.map((item) => ({ ...item })),
+    'reserved:shortcut-1',
+    { accelerator: 'CommandOrControl+B' }
+  );
+
+  assert.equal(reservedConflict.success, false);
+  assert.equal(reservedConflict.conflictWithId, 'general:toggle-visibility');
 });

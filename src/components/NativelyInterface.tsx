@@ -123,6 +123,12 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         const stored = localStorage.getItem('natively_hideChatHidesWidget');
         return stored ? stored === 'true' : true;
     });
+    const isReservedShortcutPressed = (event: KeyboardEvent | React.KeyboardEvent) => {
+        return isShortcutPressed(event, 'reservedShortcut1')
+            || isShortcutPressed(event, 'reservedShortcut2')
+            || isShortcutPressed(event, 'reservedShortcut3')
+            || isShortcutPressed(event, 'reservedShortcut4');
+    };
 
     // Model Selection State
     const [currentModel, setCurrentModel] = useState<string>('gemini-3-flash-preview');
@@ -1443,7 +1449,9 @@ Provide only the answer, nothing else.`;
             const { handleWhatToSay, handleFollowUp, handleFollowUpQuestions, handleRecap, handleAnswerNow } = handlersRef.current;
 
             // Chat Shortcuts (Scope: Local to Chat/Overlay usually, but we allow them here if focused)
-            if (isShortcutPressed(e, 'whatToAnswer')) {
+            if (isReservedShortcutPressed(e)) {
+                e.preventDefault();
+            } else if (isShortcutPressed(e, 'whatToAnswer')) {
                 e.preventDefault();
                 handleWhatToSay();
             } else if (isShortcutPressed(e, 'shorten')) {
@@ -1562,7 +1570,9 @@ Provide only the answer, nothing else.`;
             const target = e.target as HTMLElement;
             const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
-            if (isShortcutPressed(e, 'toggleVisibility')) {
+            if (isReservedShortcutPressed(e)) {
+                e.preventDefault();
+            } else if (isShortcutPressed(e, 'toggleVisibility')) {
                 // Always allow toggling visibility
                 e.preventDefault();
                 handlers.toggleVisibility();

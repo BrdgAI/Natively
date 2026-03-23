@@ -1194,6 +1194,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             ]
         },
         {
+            title: 'Reserved',
+            items: [
+                { id: 'reservedShortcut1', label: 'Reserved Shortcut 1', icon: <Keyboard size={14} /> },
+                { id: 'reservedShortcut2', label: 'Reserved Shortcut 2', icon: <Keyboard size={14} /> },
+                { id: 'reservedShortcut3', label: 'Reserved Shortcut 3', icon: <Keyboard size={14} /> },
+                { id: 'reservedShortcut4', label: 'Reserved Shortcut 4', icon: <Keyboard size={14} /> }
+            ]
+        },
+        {
             title: 'Interview',
             items: [
                 { id: 'interviewNext', label: 'Next', icon: <ArrowRight size={14} /> },
@@ -2658,6 +2667,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                 {section.title === 'Interview' && (
                                                     <div className="mb-3 rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-xs leading-6 text-text-secondary">
                                                         Interview shortcuts only apply during an active interview meeting. Phase stepping is optional, scroll stays enabled by default, and Leave / Resume Interview can stay unbound until you choose a kill-switch shortcut.
+                                                    </div>
+                                                )}
+                                                {section.title === 'Reserved' && (
+                                                    <div className="mb-3 rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-xs leading-6 text-text-secondary">
+                                                        Reserved shortcuts capture a key combo globally and intentionally do nothing in Natively. Use them to block accidental tab changes or other shortcut effects on your primary screen.
                                                     </div>
                                                 )}
                                                 <div className="space-y-1">

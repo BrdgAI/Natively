@@ -127,6 +127,12 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onStartInterview, o
 
     // Keybinds
     const { isShortcutPressed } = useShortcuts();
+    const isReservedShortcutPressed = (event: KeyboardEvent | React.KeyboardEvent) => {
+        return isShortcutPressed(event, 'reservedShortcut1')
+            || isShortcutPressed(event, 'reservedShortcut2')
+            || isShortcutPressed(event, 'reservedShortcut3')
+            || isShortcutPressed(event, 'reservedShortcut4');
+    };
 
     useEffect(() => {
         let mounted = true;
@@ -180,7 +186,9 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onStartInterview, o
 
         // Global Keydown for Launcher-specific shortcuts (Cmd+B)
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (isShortcutPressed(e, 'toggleVisibility')) {
+            if (isReservedShortcutPressed(e)) {
+                e.preventDefault();
+            } else if (isShortcutPressed(e, 'toggleVisibility')) {
                 e.preventDefault();
                 window.electronAPI.toggleWindow();
             }
