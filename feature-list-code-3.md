@@ -74,16 +74,27 @@ Interview mode should be a first-class mode with:
 
 Do not try to force this into the current generic meeting chat flow.
 
-### 2. Keep only 2 public shortcuts in interview mode
+### 2. Keep 2 primary shortcuts, with optional advanced controls available
 
 Use:
 
 | Shortcut | Name | Purpose |
 |---|---|---|
-| `Cmd+Enter` | `NEXT` | Main key. Safe to spam. Reveal the best next script or advance to the next buffered chunk. |
-| `Cmd+Shift+Enter` | `SYNC` | Screenshot sync when screen context matters. Also acts as the fallback manual phase control path. |
+| `Cmd+Enter` | `NEXT` | Main key. Safe to spam. Reveal the best next script or advance the buffered flow. |
+| `Cmd+Shift+Enter` | `SYNC` | Screenshot sync when screen context matters. Also opens the fallback control path. |
 
-No third public shortcut in v1.
+Keep these as the primary flow.
+
+Also keep optional advanced interview keybinds available in the keybind system:
+
+| Shortcut | Name | Purpose | Default state |
+|---|---|---|---|
+| `Cmd+Shift+Left` | `PHASE PREV` | Move to previous interview phase override | Disabled |
+| `Cmd+Shift+Right` | `PHASE NEXT` | Move to next interview phase override | Disabled |
+| `Cmd+Shift+Up` | `SCROLL UP` | Scroll the main interview panel upward | Enabled |
+| `Cmd+Shift+Down` | `SCROLL DOWN` | Scroll the main interview panel downward | Enabled |
+
+This keeps the default mental model simple while preserving expansion room.
 
 ### 3. `Cmd+Enter` should be the primary repeated action
 
@@ -151,18 +162,22 @@ Each panel should follow stable replacement rules:
 
 This avoids the "everything moved" feeling while the user is actively reading and typing.
 
-### 7. No free-scrolling interaction in v1
+### 7. Keep the main panel scrollable
 
-Do not add scrolling shortcuts for interview mode.
+The main interview panel should stay scrollable so we can dump more content into one continuous reading lane when needed.
 
-Instead:
+Rules:
 
-- keep the layout fixed
-- keep the most important content top-center
-- use `Cmd+Enter` to advance deeper content when needed
-- retain previous phase facts in stable side panels
+- scrolling applies to the main content lane only
+- code panel stays sticky
+- top strip stays fixed
+- side notes stay fixed or semi-sticky
+- keyboard scrolling should work even when mouse passthrough is on
 
-This is lower risk than adding more keyboard behaviors while the user is coding.
+Use:
+
+- `Cmd+Shift+Up` to scroll up
+- `Cmd+Shift+Down` to scroll down
 
 ### 8. Full-screen overlay, top-centered reading lane
 
@@ -174,7 +189,36 @@ Interview mode should use a dedicated full-screen overlay layout:
 - content visually anchored near top-center
 - enough transparency that the doc/editor underneath remains readable
 
-### 9. Manual phase override must exist, but must not need a third public shortcut
+### 9. Manual phase override must exist in two forms
+
+Form 1:
+
+- `Cmd+Shift+Enter` fallback control path
+
+Form 2:
+
+- optional direct phase navigation shortcuts
+
+This gives us both a simple default path and a faster power-user path.
+
+### 10. Interview mode needs a kill switch
+
+We need an explicit escape path that leaves interview mode immediately without forcing the user to end the meeting.
+
+Kill switch behavior:
+
+- exit interview orchestration
+- hide interview-specific overlay sections
+- return to standard overlay or launcher mode
+- preserve the active meeting/transcript unless the user separately ends the meeting
+
+Implementation rule:
+
+- expose a visible `Exit Interview Mode` control in launcher/settings
+- expose a bindable `kill switch` action in the keybind registry
+- do not hardcode a default kill-switch shortcut yet
+
+### 11. `Cmd+Shift+Enter` remains the fallback control path
 
 Use `Cmd+Shift+Enter` as the fallback control path:
 
@@ -190,30 +234,26 @@ Use `Cmd+Shift+Enter` as the fallback control path:
 
 This gives manual orchestration without introducing a separate "phase key".
 
-### 10. Model routing should be explicit
+### 12. Do not hardcode model choices in this plan
 
-As of March 23, 2026, the best low-risk model routing for this codebase is:
+Model choice should come from the dashboard/settings the user controls at runtime.
 
-- `Primary coding and narration model`: OpenAI `gpt-5.2`
-- `Fast rewrite / shorter / lower-cost background pass`: OpenAI `gpt-5-mini` later, optional
-- `Vision extraction`: Google `gemini-2.5-flash`
-- `Streaming STT`: Deepgram `nova-3`
+Implementation rule:
 
-Why:
+- interview mode reads the active text, vision, and STT provider choices from settings
+- interview mode may support interview-specific preferences, but should not freeze model names in the plan
+- optimization should stay capability-based rather than model-name-based
 
-- OpenAI's official platform overview currently describes `gpt-5.2` as the best model for coding and agentic tasks: [OpenAI Platform Overview](https://platform.openai.com/docs/overview?lang=curl)
-- Google's official Gemini models page currently positions `gemini-2.5-flash` as the best price-performance low-latency multimodal model: [Gemini API Models](https://ai.google.dev/gemini-api/docs/models)
-- Deepgram's official model docs describe `nova-3` as the current high-accuracy streaming STT option with improved real-world transcription: [Deepgram Model Options](https://developers.deepgram.com/documentation/features/model/)
+So for this feature set:
 
-Important repo note:
-
-The current codebase still hardcodes older defaults in several places:
-
-- `gpt-5.4`
-- `gemini-3.1-flash-lite-preview`
-- a settings label that still says "Deepgram Nova-2" while backend paths already use `nova-3`
-
-This plan assumes we fix those defaults early.
+- no hardcoded primary text model
+- no hardcoded vision model
+- no hardcoded STT model
+- only capability requirements:
+  - low latency
+  - strong coding quality
+  - reliable screenshot understanding
+  - strong transcription quality
 
 ## Product Output Contract
 
@@ -267,13 +307,15 @@ This matters because the user needs 4 distinct kinds of help:
 2. Launcher shows an interview-specific start surface, not the generic meeting controls.
 3. User confirms:
    - coding language default: Python
-   - text model
-   - vision model
-   - STT provider
+   - text model from dashboard
+   - vision model from dashboard
+   - STT provider from dashboard
 4. App applies the interview preset:
    - full-screen overlay
    - mouse passthrough on
    - only interview shortcuts enabled
+   - optional advanced phase-navigation shortcuts available in keybind settings
+   - main-panel scroll shortcuts active
    - transcript capture on
    - prefetch enabled
 
@@ -303,6 +345,7 @@ What we still do:
    - open questions
    - better questions to ask next
    - written constraints and example
+   - longer content stays in the same scrollable main lane
 7. If the user missed something on screen, they press `Cmd+Shift+Enter`.
 8. App extracts the problem statement from screenshot and reconciles it with transcript.
 
@@ -342,7 +385,8 @@ What the user sees:
    - comment-guided implementation
    - top-down structure first
 5. Repeated `Cmd+Enter` advances through buffered coding chunks if no new delta exists.
-6. If the interviewer changes the requirement:
+6. The main content lane stays scrollable so earlier reasoning and narration remain available without paging.
+7. If the interviewer changes the requirement:
    - user presses `Cmd+Shift+Enter`
    - app extracts current on-screen code
    - diff engine compares old plan vs new requirement
@@ -350,10 +394,10 @@ What the user sees:
      - code diff
      - narration of what changed
      - the exact line-level talking points
-7. If the interviewer asks "explain this part":
+8. If the interviewer asks "explain this part":
    - screenshot sync + code region extraction
    - next `Cmd+Enter` gives localized explanation
-8. If the user typed something wrong:
+9. If the user typed something wrong:
    - screenshot sync extracts code
    - static checker heuristics + LLM bug finder identify likely mistake
    - code panel highlights "likely issue here"
@@ -375,6 +419,7 @@ What the user sees:
    - bug-risk checklist
 3. If interviewer gives a fresh test input, user presses `Cmd+Shift+Enter`.
 4. Screenshot sync extracts the new input and updates only the dry-run panel.
+5. If the testing content is long, the user scrolls the main lane with `Cmd+Shift+Up` and `Cmd+Shift+Down`.
 
 ## Phase 6: Closing and follow-up
 
@@ -387,6 +432,7 @@ What the user sees:
    - short answer to a final change request
    - closing explanation line
    - quick question to ask the interviewer if there is time
+3. If the user wants out of interview mode, they use the kill switch and fall back to standard mode without losing the active meeting.
 
 ## Feature List In Implementation Order
 
@@ -401,21 +447,25 @@ Create a dedicated interview session type that swaps the app into interview-spec
 - launcher gets `Interview Mode`
 - interview mode uses full-screen overlay
 - interview mode reduces shortcuts to 2 public actions
+- interview mode exposes optional phase-navigation shortcuts in keybind settings
+- interview mode exposes main-panel scroll shortcuts
 - interview mode defaults to Python for coding
-- interview mode applies the recommended model routing
+- interview mode includes a kill switch out of the mode
+- interview mode reads active model/provider choices from dashboard settings
 
 ### Technical implementation
 
 - extend meeting/session metadata with:
   - `sessionType: "general" | "interview"`
   - `interviewLanguage: "python"`
-  - `preferredInterviewModel`
-  - `preferredVisionModel`
-  - `preferredInterviewStt`
+  - `preferredInterviewProfileId` or equivalent settings reference
 - store interview defaults in settings
 - branch overlay rendering by `sessionType`
 - branch shortcut registration/preset by `sessionType`
-- update model defaults from older repo constants to current recommended values
+- add a kill-switch action to leave interview mode safely
+- add optional phase-nav keybind entries
+- add main-panel scroll keybind entries
+- read active provider/model choices from settings instead of freezing them here
 
 ### Files likely touched
 
@@ -431,7 +481,6 @@ Create a dedicated interview session type that swaps the app into interview-spec
 - `electron/services/CredentialsManager.ts`
 - `electron/services/KeybindManager.ts`
 - `electron/LLMHelper.ts`
-- `electron/services/ModelVersionManager.ts`
 - `src/types/electron.d.ts`
 
 ### Confidence
@@ -480,6 +529,7 @@ Ledger fields should include:
 - latest code snapshot
 - latest code narration pack
 - screenshot freshness
+- main-panel scroll position
 - quick-question queue
 - pinned thought notes
 - change history
@@ -547,6 +597,13 @@ The `SYNC` control strip can temporarily force a phase. That override should:
 - expire automatically after a successful generation in the forced phase
 - remain visible so the user knows the app is in manual mode
 
+Also support optional direct phase movement:
+
+- `Cmd+Shift+Left` -> previous phase
+- `Cmd+Shift+Right` -> next phase
+
+These should be keybind-managed and disabled by default until enabled by the user.
+
 ### Files likely touched
 
 - `electron/interview/InterviewPhaseRouter.ts` new
@@ -603,6 +660,12 @@ If the user presses `NEXT` repeatedly and no meaningful delta exists:
 - move from `primary script` -> `expanded script` -> `rescue lines` -> `write-now checklist`
 
 This gives the user more material without wasting latency.
+
+Also support:
+
+- direct main-lane scroll with `Cmd+Shift+Up/Down`
+- direct phase stepping with `Cmd+Shift+Left/Right` when enabled
+- a kill-switch action that routes back to standard mode
 
 ### Files likely touched
 
@@ -859,6 +922,7 @@ Use 4 stable regions:
    - biggest text
    - top-centered
    - no unnecessary chrome
+   - vertically scrollable
 
 3. `Code Panel`
    - sticky
@@ -878,6 +942,8 @@ Use 4 stable regions:
 - do not feel like a generic chatbot
 - stable sections, not jumpy cards
 - highlight only the changed region when content updates
+- main lane must support keyboard scrolling
+- kill-switch state should be available in the interview UI model
 
 ### Implementation approach
 
@@ -926,6 +992,14 @@ Ship with confidence instead of assuming live interviews are the test environmen
   - regeneration after delta
 - stale-content detection
 - "freshness" badges in UI
+- keybind regression checks for:
+  - `Cmd+Enter`
+  - `Cmd+Shift+Enter`
+  - `Cmd+Shift+Left`
+  - `Cmd+Shift+Right`
+  - `Cmd+Shift+Up`
+  - `Cmd+Shift+Down`
+  - kill-switch routing
 
 ### Test fixtures to use immediately
 
@@ -951,7 +1025,7 @@ This is the simplest sane way to build it.
 
 ### Pass 1 - Put the app into interview mode
 
-Add the mode toggle, update defaults, and make the overlay full-screen with only the 2 interview shortcuts.
+Add the mode toggle, add the kill switch, and make the overlay full-screen with the 2 primary interview shortcuts plus the optional advanced navigation bindings.
 
 ### Pass 2 - Teach the app what the interview currently knows
 
@@ -969,6 +1043,8 @@ Implement `NEXT` and `SYNC` so:
 
 - `NEXT` is fast and repeatable
 - `SYNC` refreshes screen context and doubles as fallback control
+- optional phase-nav shortcuts can be enabled
+- main-panel scroll shortcuts work reliably
 
 ### Pass 4 - Build the generators in interview order
 
@@ -1011,7 +1087,6 @@ Run replay tests against the mock interview scripts and screenshot fixtures unti
 - `electron/services/KeybindManager.ts`
 - `electron/services/SettingsManager.ts`
 - `electron/services/CredentialsManager.ts`
-- `electron/services/ModelVersionManager.ts`
 - `src/App.tsx`
 - `src/index.css`
 - `src/components/Launcher.tsx`
@@ -1049,11 +1124,16 @@ Run replay tests against the mock interview scripts and screenshot fixtures unti
 
 - no automatic typing into the interview doc
 - no browser extension
-- no many-shortcut control scheme
+- no sprawling shortcut matrix beyond the primary flow plus a few navigation helpers
 - no always-on screenshot capture
-- no freeform scroll-heavy UI
+- no unbounded freeform UI that makes the user hunt for content
 - no major DB migration
 - no attempt to solve Phase 1 with complex behavioral coaching
+
+Clarification:
+
+- we are allowing a few additional navigation shortcuts now
+- but the primary interaction model still centers on `NEXT` and `SYNC`
 
 ## Bottom Line
 
