@@ -1,11 +1,12 @@
 import {
   InterviewClarificationCandidate,
   InterviewGeneratedCode,
+  InterviewPhase,
 } from './types';
 import {
   MAX_INTERVIEW_CLARIFICATION_QUESTIONS,
-  MAX_INTERVIEW_MAIN_LINES,
   MAX_INTERVIEW_PINNED_FACTS,
+  getMaxInterviewMainLines,
 } from './InterviewPromptLimits';
 
 export interface InterviewResponseFields {
@@ -26,16 +27,21 @@ const KNOWN_RESPONSE_KEYS = [
   'why',
 ] as const;
 
-export function normalizeInterviewResponse(fields: InterviewResponseFields): InterviewResponseFields {
+export function normalizeInterviewResponse(
+  fields: InterviewResponseFields,
+  phase?: InterviewPhase
+): InterviewResponseFields {
+  const mainLineLimit = getMaxInterviewMainLines(phase);
+
   return {
-    mainLines: normalizeDisplayLines(fields.mainLines, MAX_INTERVIEW_MAIN_LINES),
+    mainLines: normalizeDisplayLines(fields.mainLines, mainLineLimit),
     pinnedFacts: normalizeDisplayLines(fields.pinnedFacts, MAX_INTERVIEW_PINNED_FACTS),
     clarificationQuestions: normalizeClarificationQuestions(fields.clarificationQuestions),
     code: normalizeGeneratedCode(fields.code),
   };
 }
 
-export function salvagePlainTextLines(raw: string): string[] {
+export function salvagePlainTextLines(raw: string, phase?: InterviewPhase): string[] {
   const withoutCodeBlocks = removeFencedCodeBlocks(raw);
   const lines = withoutCodeBlocks
     .split('\n')
@@ -43,7 +49,7 @@ export function salvagePlainTextLines(raw: string): string[] {
     .map(sanitizeDisplayLine)
     .filter((line) => isMeaningfulDisplayLine(line) && !isJsonNoiseLine(line));
 
-  return dedupe(lines).slice(0, MAX_INTERVIEW_MAIN_LINES);
+  return dedupe(lines).slice(0, getMaxInterviewMainLines(phase));
 }
 
 export function sanitizeDisplayLine(value: string): string {
@@ -61,7 +67,6 @@ export function sanitizeDisplayLine(value: string): string {
 function normalizeDisplayLines(lines: string[], limit: number): string[] {
   return dedupe(
     lines
-      .flatMap(splitLineIntoSentences)
       .map(sanitizeDisplayLine)
       .filter((line) => isMeaningfulDisplayLine(line) && !isJsonNoiseLine(line))
   ).slice(0, limit);
@@ -118,12 +123,20 @@ function splitLineIntoSentences(value: string): string[] {
     return [];
   }
 
+  if (looksLikeCodePrefixedNarration(trimmed)) {
+    return [trimmed];
+  }
+
   const matches = trimmed.match(/[^.!?]+(?:[.!?]+|$)/g);
   if (!matches) {
     return [trimmed];
   }
 
   return matches.map((item) => item.trim()).filter(Boolean);
+}
+
+function looksLikeCodePrefixedNarration(value: string): boolean {
+  return /^(?:`|def\b|class\b|for\b|while\b|if\b|elif\b|else\b|return\b|yield\b|try\b|except\b|finally\b|with\b|from\b|import\b|#|[A-Za-z_][A-Za-z0-9_\[\]\.\(\), ]*\s*=)/.test(value);
 }
 
 function stripKnownKeyPrefix(value: string): string {

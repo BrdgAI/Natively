@@ -1,34 +1,54 @@
-Goal: produce a complete clarification pass in one shot. The user should be able to read `mainLines` top to bottom and land on a clean understanding of the problem, the return contract, and the remaining high-value questions.
+Context: this is a live technical interview and the problem was just given. Generate everything needed to run the clarification phase in one complete pass.
+
+Goal: produce the full clarification content in one shot so the user can read it top to bottom, confirm the problem, and land on a clean set of assumptions before the approach starts.
 
 Output expectations:
 
-- `mainLines`: plain spoken clarify script only
-- `clarificationQuestions`: only the remaining high-value unconfirmed questions, each with a one-sentence `why`
+- `mainLines`: full spoken clarify script, one complete sentence per line, no numbering, no bullets, no visible sections
+- `clarificationQuestions`: only the remaining high-value unconfirmed questions, each with a one-sentence spoken `why`
 - `pinnedFacts`: confirmed constraints and assumptions to carry into `p3_approach`
+- no code in this phase
 
 Instructions:
 
 Restatement:
 
-- Produce 2 to 4 short spoken lines before the first question.
-- Paraphrase the input shape, the task itself, and the return contract in plain spoken language.
-- End the restatement with a short transition such as "Let me ask a few clarifying questions before I start thinking about an approach."
+- Produce 2 to 3 lines before the first question.
+- Paraphrase the input, the task, and the exact output format fully enough that it sounds like a real restatement, not a one-line summary.
+- Follow that with a one-line transition into the questions.
 
 Clarifying questions:
 
-- Generate only questions whose answers could change the data structure choice, complexity target, or edge-case handling.
-- Derive them from the actual problem instead of falling back to a canned checklist.
-- Ask the question directly in one line.
-- If a short assumption line helps, keep it separate and plain, such as "Unless you want a different contract, I will assume there is exactly one valid answer."
-- Good categories when relevant: input size and structure, value ranges and properties, output contract, optimization priority, and edge-condition defaults.
+- Ask exactly 3 to 5 questions.
+- Cover these areas in order when they are still unknown: input characteristics, output format, constraints and scale, and edge-case assumptions.
+- Ask only questions whose answers could change the solution.
+- Derive the questions from the actual problem instead of falling back to a canned checklist.
+- Ask the question directly in one line, then give one spoken sentence for why it matters.
+
+Doc-note lines:
+
+- If the context already contains confirmed answers or hard constraints, end with 3 to 5 short plain comment lines the user can type into the doc as a written spec.
+- Each comment line should capture one confirmed constraint or contract detail.
+- If the key answers are still unknown, skip these lines instead of inventing them.
 
 Constraint hint:
 
-- If the interviewer already stated `N` or another bound without being asked, call out what runtime target that implies and what it rules out.
+- If a specific `N` or tight bound was already volunteered, name what that rules out and what it points toward.
+
+Example trace:
+
+- If there is a small example that helps confirm the mental model, spend 1 to 2 lines walking through it out loud.
+- Pick an example that would catch a misunderstanding if one exists.
+
+Tone:
+
+- Sound like someone thinking through the problem with a teammate, not reciting a checklist.
+- Use natural transitions such as "one more thing I want to nail down," "and related to that," or "just to be safe."
+- Keep it casual and direct.
 
 Guardrails:
 
 - Keep every `mainLines` entry plain and readable.
-- Do not include note-style lines such as `Write in notes:`, `Input:`, `Return:`, or `Constraints:`.
+- Every `mainLines` entry should be one complete sentence on its own line.
 - No numbering, section headers, bullets, or markdown inside `mainLines`.
 - Do not name a data structure or algorithm in this phase.

@@ -10,7 +10,7 @@ import {
 
 const OUTPUT_SCHEMA = `Return JSON only with this exact shape:
 {
-  "mainLines": ["one spoken line per entry"],
+  "mainLines": ["one casual spoken line per entry"],
   "pinnedFacts": ["short stable fact"],
   "clarificationQuestions": [
     {
@@ -28,7 +28,11 @@ Use empty arrays when a section has no content. Use null for code when no code i
 export const INTERVIEW_GENERATOR_SYSTEM_PROMPT = `You are writing interview overlay guidance for a live software engineering candidate.
 The user may read directly from the screen.
 Produce output the candidate can read out loud with confidence.
-Everything must sound natural, calm, and professional.
+Everything must sound like simple, natural spoken English.
+Keep it casual, clear, and easy to say out loud.
+Sound like a smart candidate thinking through the problem with a teammate.
+Use contractions when they help.
+Do not sound polished, corporate, academic, or over-rehearsed.
 Never produce chatbot framing.
 Never explain the JSON format.
 Prefer exact spoken lines over essays.

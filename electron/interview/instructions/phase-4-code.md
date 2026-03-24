@@ -1,8 +1,11 @@
-Goal: produce one complete, clean, well-narrated solution in a single pass. The code should read like a production PR, not a rushed contest draft.
+Context: the approach is locked. The candidate is coding in a plain Google Doc with no syntax highlighting, no auto-complete, and no execution.
+
+Goal: produce the full solution in one complete block with useful in-code comments already in place. `mainLines` should carry the narration the user says while typing each major part.
 
 Output expectations:
 
 - `mainLines`: spoken narration lines paired to major code sections, with at least 5 lines total
+- each `mainLines` entry should start with the exact code line or a tiny code snippet being typed, then continue with the plain-English reason in the same sentence
 - `code`: the full implementation, in Python by default
 - `pinnedFacts`: final function signature, data structures used, and complexity for `p5_test`
 
@@ -11,24 +14,17 @@ Instructions:
 Code structure:
 
 - Return the full code in one output.
-- Open the main function with a short docstring and skeleton comments that mark the logical sections.
-- Use this structure unless the problem clearly needs a different top-level shape:
-
-```python
-def solve(...):
-    """One-line description of what the function does and returns."""
-    # Guard: edge case handled here
-    # Build: primary data structure setup
-    # Process: core algorithm loop or recursion
-    # Return: final result construction
-```
-
-- Fill each section completely in the same output.
+- Put edge-case guards at the top, then the main logic, then helpers after the main function unless the problem clearly needs another layout.
+- Use short section comments when they help the user stay oriented in the doc.
+- Do not force a docstring unless it genuinely helps this problem.
+- Fill the whole solution in the same output.
 
 Narration lines:
 
 - Produce at least 5 spoken lines.
 - Pair the narration to the major implementation decisions, including data structure setup, loop shape, critical operations, and helper extraction.
+- Every narration line should start with the exact code line or a tiny code snippet being typed, then explain why it is being written that way.
+- Example shape: `seen_by_value = {} because I want O(1) lookups while I scan once through the array.`
 - Explain the why behind each decision, not just the mechanical action.
 - Include at least one line that names a concrete pitfall being avoided.
 
@@ -38,23 +34,36 @@ Edge case guards:
 - Give each meaningful guard a narration line explaining what failure it prevents.
 - Cover empty input, null input when applicable, and any domain-specific short-circuit that matters.
 
-Time pressure or mid-code pivots:
+Comments inside code:
 
-- If time is tight, say so calmly, finish the critical path first, and use explicit `TODO` stubs only when absolutely necessary.
-- If the approach changes mid-implementation, name the flaw clearly and fix the affected section instead of restarting from scratch.
+- Keep comments short and useful.
+- Use comments for why a choice was made, why a nearby alternative was not used, or what pitfall is being avoided.
+- Do not waste comments on lines that are already obvious from the code itself.
 
 Helpers and naming:
 
 - Extract each non-trivial sub-task into a named helper.
 - Write helpers after the main function unless the problem strongly benefits from another layout.
 - Use self-documenting identifiers. Single-letter names are only for small loop indices and `n`.
+- No copy-pasted logic blocks and no magic numbers when a named variable would be clearer.
 
 Code quality:
 
-- Keep functions short and single-purpose.
-- Avoid hardcoded magic when a named constraint variable would be clearer.
+- Implement the main happy path fully before secondary edge cases.
+- Say that intention once in `mainLines` if it helps the user keep moving.
 - Use the standard library fluently when it helps.
-- Keep comments minimal and purposeful.
+- If a loop boundary, sentinel value, or helper shape is non-obvious, narrate it explicitly.
+
+Pacing check:
+
+- Include one narration line that calmly checks whether the core logic is already down and whether there is still enough time left to test.
+
+Tone:
+
+- Sound like someone thinking out loud to a colleague while typing.
+- Keep it casual, direct, and purposeful.
+- Use contractions when they help.
+- If you spot an issue mid-code, name it calmly and fix it without sounding rattled.
 
 Guardrails:
 

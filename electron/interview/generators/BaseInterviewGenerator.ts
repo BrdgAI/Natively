@@ -18,7 +18,7 @@ export abstract class BaseInterviewGenerator {
       INTERVIEW_GENERATOR_SYSTEM_PROMPT
     );
     const generatedAt = Date.now();
-    const extracted = extractInterviewResponse(raw);
+    const extracted = extractInterviewResponse(raw, phase);
 
     return {
       phase: phase === 'p1_intro' ? 'p2_clarify' : phase,

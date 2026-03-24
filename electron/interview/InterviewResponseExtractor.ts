@@ -1,6 +1,7 @@
 import {
   InterviewClarificationCandidate,
   InterviewGeneratedCode,
+  InterviewPhase,
 } from './types';
 import {
   InterviewResponseFields,
@@ -9,7 +10,8 @@ import {
 } from './InterviewPresentationNormalizer';
 import {
   MAX_INTERVIEW_CLARIFICATION_QUESTIONS,
-  MAX_INTERVIEW_MAIN_LINES,
+  MAX_INTERVIEW_PINNED_FACTS,
+  getMaxInterviewMainLines,
 } from './InterviewPromptLimits';
 
 interface JsonObject {
@@ -30,23 +32,24 @@ const EMPTY_RESPONSE_FIELDS: InterviewResponseFields = {
   code: null,
 };
 
-export function extractInterviewResponse(raw: string): InterviewResponseFields {
+export function extractInterviewResponse(raw: string, phase?: InterviewPhase): InterviewResponseFields {
   const normalizedRaw = normalizeRawText(raw);
+  const mainLineLimit = getMaxInterviewMainLines(phase);
   const parsedObject = parseBestStructuredObject(normalizedRaw);
   const extracted = parsedObject
-    ? extractFromObject(parsedObject)
-    : extractByKnownKeys(normalizedRaw);
+    ? extractFromObject(parsedObject, mainLineLimit)
+    : extractByKnownKeys(normalizedRaw, mainLineLimit);
 
   const code = extracted.code || extractStandaloneCodeBlock(normalizedRaw);
 
   return normalizeInterviewResponse({
     mainLines: extracted.mainLines.length > 0
       ? extracted.mainLines
-      : salvagePlainTextLines(normalizedRaw),
+      : salvagePlainTextLines(normalizedRaw, phase),
     pinnedFacts: extracted.pinnedFacts,
     clarificationQuestions: extracted.clarificationQuestions,
     code,
-  });
+  }, phase);
 }
 
 function parseBestStructuredObject(raw: string): JsonObject | null {
@@ -91,19 +94,19 @@ function buildJsonCandidates(raw: string): string[] {
   return result.slice(0, 24);
 }
 
-function extractFromObject(object: JsonObject): InterviewResponseFields {
+function extractFromObject(object: JsonObject, mainLineLimit: number): InterviewResponseFields {
   return {
-    mainLines: normalizeStringArray(readArray(object, 'mainLines')),
-    pinnedFacts: normalizeStringArray(readArray(object, 'pinnedFacts')),
+    mainLines: normalizeStringArray(readArray(object, 'mainLines'), mainLineLimit),
+    pinnedFacts: normalizeStringArray(readArray(object, 'pinnedFacts'), MAX_INTERVIEW_PINNED_FACTS),
     clarificationQuestions: parseClarificationQuestionArray(readArray(object, 'clarificationQuestions')),
     code: parseGeneratedCodeFromObject(readObject(object, 'code')),
   };
 }
 
-function extractByKnownKeys(raw: string): InterviewResponseFields {
+function extractByKnownKeys(raw: string, mainLineLimit: number): InterviewResponseFields {
   return {
-    mainLines: parseStringArrayValue(firstValueForKey(raw, 'mainLines')),
-    pinnedFacts: parseStringArrayValue(firstValueForKey(raw, 'pinnedFacts')),
+    mainLines: parseStringArrayValue(firstValueForKey(raw, 'mainLines'), mainLineLimit),
+    pinnedFacts: parseStringArrayValue(firstValueForKey(raw, 'pinnedFacts'), MAX_INTERVIEW_PINNED_FACTS),
     clarificationQuestions: parseClarificationQuestionsValue(firstValueForKey(raw, 'clarificationQuestions')),
     code: parseGeneratedCodeValue(firstValueForKey(raw, 'code')),
   };
@@ -164,7 +167,7 @@ function captureValue(raw: string, startIndex: number): { valueText: string; nex
   };
 }
 
-function parseStringArrayValue(valueText: string | null): string[] {
+function parseStringArrayValue(valueText: string | null, limit: number): string[] {
   if (!valueText) {
     return [];
   }
@@ -172,7 +175,7 @@ function parseStringArrayValue(valueText: string | null): string[] {
   const sanitized = sanitizeJsonCandidate(valueText);
   const parsed = safelyParseValue(sanitized);
   if (Array.isArray(parsed)) {
-    return normalizeStringArray(parsed);
+    return normalizeStringArray(parsed, limit);
   }
 
   if (isQuotedValue(valueText)) {
@@ -183,14 +186,14 @@ function parseStringArrayValue(valueText: string | null): string[] {
   const trimmed = trimArrayWrapper(valueText);
   const quotedValues = collectQuotedValues(trimmed);
   if (quotedValues.length > 0) {
-    return normalizeStringArray(quotedValues);
+    return normalizeStringArray(quotedValues, limit);
   }
 
   return trimmed
     .split(/[\n,]+/)
     .map((item) => item.trim())
     .filter(Boolean)
-    .slice(0, MAX_INTERVIEW_MAIN_LINES);
+    .slice(0, limit);
 }
 
 function parseClarificationQuestionsValue(valueText: string | null): InterviewClarificationCandidate[] {
@@ -457,19 +460,12 @@ function parseStringValue(valueText: string): string | null {
   return trimmed.replace(/,\s*$/, '').trim();
 }
 
-function parseStringArray(value: JsonValue[]): string[] {
-  return value
-    .map((item) => (typeof item === 'string' ? item.trim() : ''))
-    .filter(Boolean)
-    .slice(0, MAX_INTERVIEW_MAIN_LINES);
-}
-
-function normalizeStringArray(items: JsonValue[] | string[]): string[] {
+function normalizeStringArray(items: JsonValue[] | string[], limit: number): string[] {
   const values = Array.isArray(items) ? items : [];
   return values
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter(Boolean)
-    .slice(0, MAX_INTERVIEW_MAIN_LINES);
+    .slice(0, limit);
 }
 
 function safelyParseObject(raw: string): JsonObject | null {

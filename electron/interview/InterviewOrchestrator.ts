@@ -520,31 +520,36 @@ function fallbackMainLines(phase: RenderableInterviewPhase, snapshot: InterviewS
     case 'p2_clarify':
       return [
         snapshot.problemStatement
-          ? `Let me restate the problem first to make sure I have it right: ${snapshot.problemStatement}`
-          : 'Let me restate the problem first so I can confirm the input, output, and constraints before coding.',
-        'The main thing I want to confirm is the input shape, the exact return format, and the important constraints.',
-        'Let me ask a few clarifying questions before I start thinking about an approach.',
+          ? `Let me restate the problem in my own words first just to make sure I have it right: ${snapshot.problemStatement}`
+          : 'Let me restate the problem in my own words first so I can lock down the input, output, and constraints before I code.',
+        'A couple of things I still want to nail down are the exact return contract, the constraints, and any edge-case defaults.',
+        'Let me ask a few clarifying questions before I move into the approach.',
       ];
     case 'p3_approach':
       return [
-        'I will start with the brute-force idea and then move to the optimized approach.',
-        'I will explain why the optimized direction matches the confirmed constraints.',
-        'I want to confirm the final time and space complexity before I code.',
+        'I would start with the dumb version first so we have a clean baseline.',
+        'From there I would cross off the options that are too slow or that do not match the shape of the problem.',
+        'The one I would actually code is the simplest approach that still hits the bound we need.',
+        'Before I move on, I would do one quick time and space sanity check against the biggest input we were given.',
       ];
     case 'p4_code':
       return [
-        'I am going to write the structure first and then fill in the core logic.',
-        'I will narrate the key implementation choices as I go so the reasoning stays clear.',
+        'def solve(...): because I want to lock the outer shape first and then fill it in from top to bottom.',
+        'if not items: return ... because I want the trivial guard handled before the real work starts.',
+        'state = ... because I need one place to keep the running information the main loop depends on.',
+        'for item in items: because the core logic is easiest to explain in one clean pass.',
+        'return result because I want the output construction to stay separate from the updates in the middle.',
       ];
     case 'p5_test':
       return [
-        'Let me dry run the code with one concrete example and then cover edge cases.',
-        'After that I will restate the time and space complexity and call out any optimization trade-offs.',
+        'Let me walk one real example first so I can make sure the state changes the way I expect.',
+        'After that I want to check the edge cases that usually break this kind of solution.',
+        'Once that looks good, I will restate the time and space costs and call out one tradeoff we could explore next.',
       ];
     case 'p6_follow_up':
       return [
-        'I can make that follow-up change and then summarize the impact clearly.',
-        'After that I will recap the final solution and close with a couple of strong questions.',
+        'I would make that follow-up change by adjusting the core mechanism and then I would call out the tradeoff clearly.',
+        'After that I will recap the final solution and close with a couple of thoughtful questions.',
       ];
   }
 }

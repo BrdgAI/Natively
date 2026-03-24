@@ -343,3 +343,27 @@ test('clarify handoff carries raw visible questions forward even when the sideca
 
   orchestrator.endSession();
 });
+
+test('phase fallbacks use the newer casual shapes when the model returns no main lines', async () => {
+  const llm = new FakeLLMHelper(['{}', '{}', '{}']);
+  const orchestrator = new InterviewOrchestrator(llm as never, createAppStateStub() as never);
+
+  orchestrator.startSession('interview', { codingLanguage: 'python' });
+
+  orchestrator.shiftManualPhase(1);
+  const approach = await orchestrator.handleNext();
+  assert.ok(approach.latestPayload?.mainLines[0]?.includes('dumb version first'));
+  assert.ok((approach.latestPayload?.mainLines.length || 0) >= 4);
+
+  orchestrator.shiftManualPhase(1);
+  const coding = await orchestrator.handleNext();
+  assert.ok(coding.latestPayload?.mainLines[0]?.startsWith('def solve(...):'));
+  assert.ok(coding.latestPayload?.mainLines[3]?.startsWith('for item in items:'));
+
+  orchestrator.shiftManualPhase(1);
+  const testing = await orchestrator.handleNext();
+  assert.ok(testing.latestPayload?.mainLines[0]?.includes('walk one real example first'));
+  assert.ok((testing.latestPayload?.mainLines.length || 0) >= 5);
+
+  orchestrator.endSession();
+});

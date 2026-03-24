@@ -98,14 +98,51 @@ def solve(nums, target):
   assert.equal(extracted.code?.content, 'def solve(nums, target):\n    return None');
 });
 
-test('response extractor preserves longer main line lists needed for deeper testing scripts', () => {
+test('response extractor preserves structured json main lines entry-by-entry instead of re-splitting them', () => {
   const extracted = extractInterviewResponse(JSON.stringify({
-    mainLines: Array.from({ length: 24 }, (_, index) => `Line ${index + 1}.`),
+    mainLines: [
+      'I would keep hash map alive for now because it matches the input shape. Two pointers only works if I sort first, which changes the story.',
+    ],
     pinnedFacts: [],
     clarificationQuestions: [],
     code: null,
-  }));
+  }), 'p3_approach');
 
-  assert.equal(extracted.mainLines.length, 24);
-  assert.equal(extracted.mainLines[23], 'Line 24.');
+  assert.deepEqual(extracted.mainLines, [
+    'I would keep hash map alive for now because it matches the input shape. Two pointers only works if I sort first, which changes the story.',
+  ]);
+});
+
+test('response extractor keeps code-line-prefixed narration intact in plain-text fallback', () => {
+  const extracted = extractInterviewResponse(`
+if complement in seen_by_value: because I can return the answer as soon as I find the pair. It also keeps this loop single-pass.
+return [seen_by_value[complement], index] because the output contract wants indices, not values.
+`, 'p4_code');
+
+  assert.deepEqual(extracted.mainLines, [
+    'if complement in seen_by_value: because I can return the answer as soon as I find the pair. It also keeps this loop single-pass.',
+    'return [seen_by_value[complement], index] because the output contract wants indices, not values.',
+  ]);
+});
+
+test('response extractor preserves longer phase-specific main line lists for approach and testing scripts', () => {
+  const extracted = extractInterviewResponse(JSON.stringify({
+    mainLines: Array.from({ length: 40 }, (_, index) => `Approach line ${index + 1}.`),
+    pinnedFacts: [],
+    clarificationQuestions: [],
+    code: null,
+  }), 'p3_approach');
+
+  assert.equal(extracted.mainLines.length, 40);
+  assert.equal(extracted.mainLines[39], 'Approach line 40.');
+
+  const testingExtracted = extractInterviewResponse(JSON.stringify({
+    mainLines: Array.from({ length: 42 }, (_, index) => `Testing line ${index + 1}.`),
+    pinnedFacts: [],
+    clarificationQuestions: [],
+    code: null,
+  }), 'p5_test');
+
+  assert.equal(testingExtracted.mainLines.length, 42);
+  assert.equal(testingExtracted.mainLines[41], 'Testing line 42.');
 });

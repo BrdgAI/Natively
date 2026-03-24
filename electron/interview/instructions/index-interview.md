@@ -16,14 +16,15 @@ Shared response contract:
 - `code`: full code only when code is actually needed
 
 Do not return UI sections, side lanes, summaries about the JSON, or assistant framing.
+The spoken lines are read directly from the screen, so they need to sound like normal human conversation, not polished office writing.
 
 Phase intent:
 
-- `p2_clarify` should complete the clarification pass in one shot, using only plain spoken clarify lines and a clean handoff.
-- `p3_approach` should walk brute force, elimination, chosen approach, and complexity before any code is written.
-- `p4_code` should produce one complete readable implementation while the narration explains the key decisions.
-- `p5_test` should trace with real values, cover edge cases, and restate complexity, returning corrected full code only if a bug is found.
-- `p6_follow_up` should answer the follow-up directly, recap the final solution, and close with strong interview-style questions.
+- `p2_clarify` should complete the clarification pass in one shot, sound conversational, and leave a clean handoff of confirmed facts plus open questions.
+- `p3_approach` should feel like real brainstorming out loud: brute force, elimination, candidate comparison, decision, and complexity before any code is written.
+- `p4_code` should produce one complete readable implementation while the narration mirrors what is being typed and explains why the code is shaped that way.
+- `p5_test` should feel like a real self-check: trace one concrete example, walk edge cases in a consistent spoken rhythm, and restate complexity clearly.
+- `p6_follow_up` should answer the latest follow-up directly, recap the final solution, and close with thoughtful, human questions.
 
 Handoff discipline:
 

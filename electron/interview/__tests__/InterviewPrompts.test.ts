@@ -1,11 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPhasePrompt } from '../InterviewPrompts';
+import { buildPhasePrompt, INTERVIEW_GENERATOR_SYSTEM_PROMPT } from '../InterviewPrompts';
 import { InterviewMainDocComposer } from '../InterviewMainDocComposer';
 import { InterviewMemoryLedger } from '../InterviewMemoryLedger';
 import { InterviewOverlayPayload } from '../types';
 
-test('clarify phase prompt includes the simplified one-shot clarify guidance and the slim JSON contract', () => {
+test('shared interview system prompt now pushes casual spoken english instead of professional polish', () => {
+  assert.ok(INTERVIEW_GENERATOR_SYSTEM_PROMPT.includes('casual, clear, and easy to say out loud'));
+  assert.ok(INTERVIEW_GENERATOR_SYSTEM_PROMPT.includes('thinking through the problem with a teammate'));
+  assert.equal(INTERVIEW_GENERATOR_SYSTEM_PROMPT.includes('professional'), false);
+});
+
+test('clarify phase prompt includes the v2-style clarification guidance and the slim JSON contract', () => {
   const ledger = new InterviewMemoryLedger();
   ledger.startSession('interview', { codingLanguage: 'python' });
   ledger.setProblemStatement('Two Sum', ['Exactly one answer exists'], ['nums = [2,7,11,15], target = 9']);
@@ -46,9 +52,10 @@ test('clarify phase prompt includes the simplified one-shot clarify guidance and
     previousPayload: null,
   });
 
-  assert.ok(prompt.includes('Produce 2 to 4 short spoken lines before the first question.'));
-  assert.ok(prompt.includes('Do not include note-style lines such as `Write in notes:`'));
-  assert.ok(prompt.includes('Ask the question directly in one line.'));
+  assert.equal(prompt.includes('professional'), false);
+  assert.ok(prompt.includes('Ask exactly 3 to 5 questions.'));
+  assert.ok(prompt.includes('If the context already contains confirmed answers or hard constraints, end with 3 to 5 short plain comment lines'));
+  assert.ok(prompt.includes('Use natural transitions such as "one more thing I want to nail down," "and related to that," or "just to be safe."'));
   assert.ok(prompt.includes('Problem statement:'));
   assert.ok(prompt.includes('Two Sum from the prompt'));
   assert.ok(prompt.includes('Visible constraints:'));
@@ -66,6 +73,61 @@ test('clarify phase prompt includes the simplified one-shot clarify guidance and
   assert.ok(prompt.includes('`mainLines`'));
   assert.ok(prompt.includes('`clarificationQuestions`'));
   assert.ok(prompt.includes('`code`'));
+});
+
+test('approach prompt carries the longer brainstorming-style walkthrough instructions', () => {
+  const ledger = new InterviewMemoryLedger();
+  ledger.startSession('interview', { codingLanguage: 'python' });
+  ledger.setProblemStatement('Two Sum', ['Exactly one answer exists'], ['nums = [2,7,11,15], target = 9']);
+
+  const prompt = buildPhasePrompt('p3_approach', {
+    snapshot: ledger.getSnapshot(),
+    recentTranscript: [],
+    earlierMemory: [],
+    previousPayload: null,
+  });
+
+  assert.ok(prompt.includes('6 to 8 minutes'));
+  assert.ok(prompt.includes('Walk through the standard toolkit in one spoken sweep'));
+  assert.ok(prompt.includes('Spend 2 to 3 lines on each remaining candidate.'));
+  assert.ok(prompt.includes('Sound like someone crossing options off out loud while thinking'));
+});
+
+test('coding prompt now asks for code-line-first narration and why-comments instead of production-pr polish', () => {
+  const ledger = new InterviewMemoryLedger();
+  ledger.startSession('interview', { codingLanguage: 'python' });
+  ledger.setProblemStatement('Two Sum', ['Exactly one answer exists']);
+
+  const prompt = buildPhasePrompt('p4_code', {
+    snapshot: ledger.getSnapshot(),
+    recentTranscript: [],
+    earlierMemory: [],
+    previousPayload: null,
+  });
+
+  assert.ok(prompt.includes('each `mainLines` entry should start with the exact code line or a tiny code snippet being typed'));
+  assert.ok(prompt.includes('Example shape: `seen_by_value = {} because I want O(1) lookups while I scan once through the array.`'));
+  assert.ok(prompt.includes('Use comments for why a choice was made'));
+  assert.equal(prompt.includes('production PR'), false);
+  assert.equal(prompt.includes('Do not force a docstring unless it genuinely helps this problem.'), true);
+});
+
+test('testing prompt includes the hybrid spoken structure for trace and edge cases', () => {
+  const ledger = new InterviewMemoryLedger();
+  ledger.startSession('interview', { codingLanguage: 'python' });
+  ledger.setProblemStatement('Two Sum', ['Exactly one answer exists']);
+
+  const prompt = buildPhasePrompt('p5_test', {
+    snapshot: ledger.getSnapshot(),
+    recentTranscript: [],
+    earlierMemory: [],
+    previousPayload: null,
+  });
+
+  assert.ok(prompt.includes('Produce 6 to 10 lines.'));
+  assert.ok(prompt.includes('Use a consistent spoken mini-template'));
+  assert.ok(prompt.includes('Use natural transitions like "next I want to check," "one case I do not want to skip," or "just to make sure this branch is safe."'));
+  assert.ok(prompt.includes('Sound like someone carefully reading back through their own code'));
 });
 
 test('approach prompt receives confirmed clarify handoff context', () => {

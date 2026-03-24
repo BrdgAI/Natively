@@ -1,46 +1,57 @@
-Goal: walk through the full approach before writing a single line of code. The interviewer should know exactly what will be implemented and why.
+Context: clarification is done. The candidate now needs to talk through the solution before writing any code. This phase earns or loses signal based on thought process, not just the final answer.
+
+Goal: produce one complete approach walkthrough the user can speak continuously for 6 to 8 minutes. By the end, the interviewer should know exactly what will be built and why.
 
 Output expectations:
 
-- `mainLines`: the full spoken approach script, one idea per line
+- `mainLines`: the full spoken approach script, one complete sentence per line
 - `pinnedFacts`: the chosen approach, key data structure, and final complexity for `p4_code`
-- Inline pseudocode inside `mainLines` only if it helps explain one non-obvious mechanism in 1 to 2 lines
+- inline pseudocode inside `mainLines` only if it is 1 to 2 lines and it genuinely makes one non-obvious idea clearer
 
 Instructions:
 
-Brute force:
+Brute force opening:
 
-- Produce at least 3 lines for the naive approach.
-- State what it iterates over, what it checks, what it returns, and the exact time complexity.
-- If a bound is known, estimate the operation count for that bound and say whether it is feasible.
+- Produce at least 3 lines.
+- Name the most naive version first.
+- State what it does, its exact time and space cost, and why it fails once `N` gets large.
+- If a bound is known, do a rough operation-count sanity check out loud.
 
-Algorithm elimination pass:
+Elimination pass:
 
-- Produce at least 4 lines that consider the relevant toolkit candidates and eliminate the ones that do not fit.
-- Apply both runtime filtering and structural filtering.
-- Name why each rejected family does not match the problem shape or constraints.
-- End by naming the small set of approaches still worth considering.
+- Walk through the standard toolkit in one spoken sweep: hash map, two pointers, sliding window, heap, BFS or DFS, binary search, DP, sorting, backtracking, and union-find.
+- Eliminate the candidates that are too slow for the confirmed `N` or structurally wrong for the problem.
+- Give each elimination one short spoken sentence.
+- End by naming the 2 to 3 candidates still worth considering.
 
-Chosen approach with justification:
+Candidate comparison:
 
-- Produce at least 3 lines that commit to one approach and explain the reasoning chain, not just the label.
-- Call out the important design decisions such as traversal direction, early termination, memoization vs tabulation, or helper structure choice.
-- If the interviewer gives a hint, incorporate it immediately and explain how it changes the plan.
-
-Stuck scenario:
-
-- If the optimized path is still unclear, narrate the search instead of going silent.
-- Use the constraints and structure to rule options in or out, then ask for a subtle nudge only if needed.
+- Spend 2 to 3 lines on each remaining candidate.
+- For each one, say what it does here, its time and space cost, and what would make it the wrong choice.
+- Then commit to one approach clearly and tie the reason directly to the problem's structure and constraints.
 
 Complexity chain:
 
-- Produce at least 3 lines that break time down by operation count and per-operation cost.
-- Name the major space contributors and the total space complexity.
-- If a concrete bound is known, sanity-check the total work numerically.
+- Produce at least 3 lines that break the chosen approach down by step.
+- Name each major step, its cost, and then the total time.
+- Name the major space contributors and the total space.
+- If a concrete bound is known, do a rough numerical sanity check out loud.
+
+Non-obvious design decisions:
+
+- Call out any direction choice, early stop, state shape, helper structure, or other design choice that is intentional.
+- If the interviewer gave a hint, fold it into the explanation immediately and say how it changes the plan.
 
 Alignment close:
 
-- End with 1 to 2 lines that confirm alignment before coding without sounding needy.
+- End with 1 line that checks alignment before coding starts.
+
+Tone:
+
+- Sound like someone crossing options off out loud while thinking, not giving a polished lecture.
+- Make the elimination pass quick and matter-of-fact.
+- When you commit to the final approach, sound decisive.
+- Prefer phrasing like "I'd go with," "the reason is," "that one falls apart because," and "this is the one I'd actually code."
 
 Guardrails:
 
