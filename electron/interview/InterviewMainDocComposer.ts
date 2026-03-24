@@ -11,11 +11,16 @@ import {
   InterviewSessionSnapshot,
   RenderableInterviewPhase,
 } from './types';
+import {
+  isRepairableLinePair,
+  normalizeInterviewLine,
+} from './InterviewContentHealth';
 
 export interface InterviewComposeOptions {
   clarificationItems?: InterviewClarificationItem[];
   savedContexts: InterviewSavedContexts;
   diffText?: string | null;
+  forceFreshContent?: boolean;
 }
 
 export class InterviewMainDocComposer {
@@ -25,21 +30,24 @@ export class InterviewMainDocComposer {
     options: InterviewComposeOptions
   ): InterviewPhaseDocument {
     const previous = snapshot.phaseDocuments[payload.phase];
+    const baseFeed = options.forceFreshContent ? [] : previous.mainFeed;
+    const mergedLines = mergeDisplayLines(baseFeed, payload.phase, payload.mainLines, options.clarificationItems);
     const updatedFeed = applyPhaseStateUpdates(
-      previous.mainFeed,
+      mergedLines.feed,
       payload.phase,
       options.clarificationItems,
-      payload.mainLines.length > 0
+      mergedLines.lines.length > 0
     );
-    const nextFeed = payload.mainLines.length > 0
-      ? [...updatedFeed, ...buildBlockEntries(payload.phase, payload.mainLines, updatedFeed, options.clarificationItems)]
+    const nextFeed = mergedLines.lines.length > 0
+      ? [...updatedFeed, ...buildBlockEntries(payload.phase, mergedLines.lines, updatedFeed, options.clarificationItems)]
       : updatedFeed;
     const codePanes = buildCodePanes(previous, snapshot, payload, options.diffText || null);
-    const status = buildStatus(payload, codePanes.codeUpdated);
+    const mainUpdated = mergedLines.repaired || mergedLines.lines.length > 0 || hasFeedChanged(previous.mainFeed, updatedFeed);
+    const status = buildStatus(mainUpdated, codePanes.codeUpdated, payload.generatedAt);
 
     return {
       phase: payload.phase,
-      mainFeed: nextFeed.length > 0 ? nextFeed : previous.mainFeed,
+      mainFeed: nextFeed.length > 0 ? nextFeed : baseFeed.length > 0 ? baseFeed : previous.mainFeed,
       primaryCode: codePanes.primaryCode,
       secondaryCode: codePanes.secondaryCode,
       savedContexts: cloneSavedContexts(options.savedContexts),
@@ -104,9 +112,9 @@ function buildContextStatus(section: string, message: string): InterviewRenderSt
   };
 }
 
-function buildStatus(payload: InterviewOverlayPayload, codeUpdated: boolean): InterviewRenderStatus {
+function buildStatus(mainUpdated: boolean, codeUpdated: boolean, generatedAt: number): InterviewRenderStatus {
   const updatedSections: string[] = [];
-  if (payload.mainLines.length > 0) {
+  if (mainUpdated) {
     updatedSections.push('Main');
   }
   if (codeUpdated) {
@@ -116,8 +124,8 @@ function buildStatus(payload: InterviewOverlayPayload, codeUpdated: boolean): In
   return {
     status: updatedSections.length > 0 ? 'updated' : 'unchanged',
     updatedSections,
-    message: updatedSections.length > 0 ? `Updated: ${updatedSections.join(', ')}` : 'No updates',
-    at: payload.generatedAt,
+    message: updatedSections.length > 0 ? `Updated: ${updatedSections.join(', ')}` : 'No updates found',
+    at: generatedAt,
   };
 }
 
@@ -244,7 +252,12 @@ function matchClarificationItem(
     if (!normalizedQuestion) {
       continue;
     }
-    if (normalizedLine === normalizedQuestion || normalizedLine.includes(normalizedQuestion)) {
+    if (
+      normalizedLine === normalizedQuestion
+      || normalizedLine.includes(normalizedQuestion)
+      || normalizedQuestion.includes(normalizedLine)
+      || isRepairableLinePair(normalizedLine, normalizedQuestion)
+    ) {
       return item;
     }
   }
@@ -290,10 +303,21 @@ function buildCodePanes(
   const hasGeneratedCode = Boolean(payload.code?.content.trim());
   const currentContent = snapshot.currentCode?.content.trim() || '';
   const nextContent = payload.code?.content.trim() || '';
+  const previousContent = previousPrimary?.content.trim() || '';
+  const referenceContent = currentContent || previousContent;
+  const hasCodeChange = Boolean(nextContent && normalizeContent(referenceContent) !== normalizeContent(nextContent));
   const hasMeaningfulDiff = Boolean(currentContent && nextContent && currentContent !== nextContent);
   const emptyNotes: string[] = [];
 
   if (!hasGeneratedCode) {
+    return {
+      primaryCode: previousPrimary || snapshotCode,
+      secondaryCode: previous.secondaryCode,
+      codeUpdated: false,
+    };
+  }
+
+  if (!hasCodeChange) {
     return {
       primaryCode: previousPrimary || snapshotCode,
       secondaryCode: previous.secondaryCode,
@@ -392,5 +416,132 @@ function formatPhaseLabel(phase: RenderableInterviewPhase): string {
 }
 
 function normalize(value: string): string {
-  return value.trim().replace(/\s+/g, ' ');
+  return normalizeInterviewLine(value);
+}
+
+function normalizeContent(value: string): string {
+  return value.trim().replace(/\r\n/g, '\n');
+}
+
+function mergeDisplayLines(
+  feed: InterviewFeedEntry[],
+  phase: RenderableInterviewPhase,
+  lines: string[],
+  clarificationItems?: InterviewClarificationItem[]
+): { feed: InterviewFeedEntry[]; lines: string[]; repaired: boolean } {
+  const nextFeed = feed.map(cloneFeedEntry);
+  const existing = new Set(
+    nextFeed
+      .filter((entry) => entry.type === 'line' && entry.text)
+      .map((entry) => normalize(entry.text as string).toLowerCase())
+  );
+  const seen = new Set<string>();
+  const result: string[] = [];
+  let repaired = false;
+
+  for (const line of lines) {
+    const normalized = normalize(line);
+    if (!normalized) {
+      continue;
+    }
+
+    const key = normalized.toLowerCase();
+    if (existing.has(key) || seen.has(key)) {
+      continue;
+    }
+
+    const repairIndex = findRepairIndex(nextFeed, normalized);
+    if (repairIndex >= 0) {
+      const entry = nextFeed[repairIndex];
+      const previousText = normalize(entry.text || '');
+      if (previousText && previousText.toLowerCase() !== key) {
+        existing.delete(previousText.toLowerCase());
+      }
+      entry.text = normalized;
+      repairLineClassification(entry, phase, normalized, clarificationItems);
+      existing.add(key);
+      repaired = true;
+      continue;
+    }
+
+    seen.add(key);
+    result.push(normalized);
+  }
+
+  return {
+    feed: nextFeed,
+    lines: result,
+    repaired,
+  };
+}
+
+function findRepairIndex(feed: InterviewFeedEntry[], incomingLine: string): number {
+  let bestIndex = -1;
+  let bestLength = 0;
+
+  for (let index = 0; index < feed.length; index += 1) {
+    const entry = feed[index];
+    if (entry.type !== 'line' || !entry.text) {
+      continue;
+    }
+
+    const existingLine = normalize(entry.text);
+    if (!isRepairableLinePair(existingLine, incomingLine)) {
+      continue;
+    }
+
+    if (existingLine.length > bestLength) {
+      bestIndex = index;
+      bestLength = existingLine.length;
+    }
+  }
+
+  return bestIndex;
+}
+
+function repairLineClassification(
+  entry: InterviewFeedEntry,
+  phase: RenderableInterviewPhase,
+  line: string,
+  clarificationItems?: InterviewClarificationItem[]
+): void {
+  if (phase !== 'p2_clarify' || !clarificationItems) {
+    return;
+  }
+
+  const clarificationItem = matchClarificationItem(line, clarificationItems);
+  if (clarificationItem) {
+    entry.state = mapClarificationStatus(clarificationItem.status);
+    entry.clarificationId = clarificationItem.id;
+    return;
+  }
+
+  if (isNoteLine(line)) {
+    entry.state = 'note';
+    entry.clarificationId = null;
+  }
+}
+
+function hasFeedChanged(previous: InterviewFeedEntry[], next: InterviewFeedEntry[]): boolean {
+  if (previous.length !== next.length) {
+    return true;
+  }
+
+  for (let index = 0; index < previous.length; index += 1) {
+    const left = previous[index];
+    const right = next[index];
+    if (
+      left.id !== right.id
+      || left.type !== right.type
+      || left.text !== right.text
+      || left.state !== right.state
+      || left.blockId !== right.blockId
+      || left.blockLabel !== right.blockLabel
+      || left.clarificationId !== right.clarificationId
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }

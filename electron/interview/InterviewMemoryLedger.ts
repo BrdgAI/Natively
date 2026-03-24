@@ -1,9 +1,12 @@
 import { EventEmitter } from 'events';
 import { InterviewContextDeltaBuilder } from './InterviewContextDeltaBuilder';
+import { isLikelyIncompletePhaseDocument } from './InterviewContentHealth';
 import { InterviewMainDocComposer } from './InterviewMainDocComposer';
 import {
   InterviewClarificationItem,
   InterviewCodeSnapshot,
+  InterviewFetchIndicator,
+  InterviewFetchIndicators,
   InterviewFollowUpState,
   InterviewModeConfig,
   InterviewOverlayPayload,
@@ -30,6 +33,7 @@ export class InterviewMemoryLedger extends EventEmitter {
   private pausedInterviewSession = false;
   private readonly contextDeltaBuilder = new InterviewContextDeltaBuilder();
   private readonly documentComposer = new InterviewMainDocComposer();
+  private phaseRefreshTargets: Record<RenderableInterviewPhase, number | null> = createEmptyPhaseRefreshTargets();
 
   private state: InterviewSessionSnapshot = {
     active: false,
@@ -66,6 +70,7 @@ export class InterviewMemoryLedger extends EventEmitter {
     mainScrollOffset: 0,
     lastScreenshotPath: null,
     lastScreenshotPreview: null,
+    fetchIndicators: createEmptyFetchIndicators(),
   };
 
   private config: InterviewModeConfig = DEFAULT_CONFIG;
@@ -73,6 +78,7 @@ export class InterviewMemoryLedger extends EventEmitter {
   public startSession(sessionType: SessionType, config?: Partial<InterviewModeConfig>): void {
     this.transcript = [];
     this.pausedInterviewSession = false;
+    this.phaseRefreshTargets = createEmptyPhaseRefreshTargets();
     this.config = { ...DEFAULT_CONFIG, ...(config || {}) };
 
     const phaseDocuments = createEmptyPhaseDocuments();
@@ -114,6 +120,7 @@ export class InterviewMemoryLedger extends EventEmitter {
       mainScrollOffset: phaseDocuments.p2_clarify.scrollOffset,
       lastScreenshotPath: null,
       lastScreenshotPreview: null,
+      fetchIndicators: createEmptyFetchIndicators(),
     };
     this.emitUpdate();
   }
@@ -160,6 +167,7 @@ export class InterviewMemoryLedger extends EventEmitter {
   public endSession(): void {
     this.transcript = [];
     this.pausedInterviewSession = false;
+    this.phaseRefreshTargets = createEmptyPhaseRefreshTargets();
     this.state = {
       ...this.state,
       active: false,
@@ -190,6 +198,7 @@ export class InterviewMemoryLedger extends EventEmitter {
       lastScreenshotPreview: null,
       lastScreenshotAt: null,
       mainScrollOffset: 0,
+      fetchIndicators: createEmptyFetchIndicators(),
     };
     this.emitUpdate();
   }
@@ -210,14 +219,14 @@ export class InterviewMemoryLedger extends EventEmitter {
     return [...this.transcript];
   }
 
-  public getRecentTranscript(limit: number = 24): InterviewTranscriptSegment[] {
+  public getRecentTranscript(limit: number = 40): InterviewTranscriptSegment[] {
     return this.transcript.slice(-limit);
   }
 
   public addTranscript(segment: InterviewTranscriptSegment): void {
     this.transcript.push(segment);
-    if (this.transcript.length > 300) {
-      this.transcript = this.transcript.slice(-300);
+    if (this.transcript.length > 500) {
+      this.transcript = this.transcript.slice(-500);
     }
 
     let nextState: InterviewSessionSnapshot = {
@@ -246,6 +255,7 @@ export class InterviewMemoryLedger extends EventEmitter {
           [activePhase]: nextDocument,
         },
       });
+      this.requestFreshPhaseGeneration(activePhase, nextState.inputRevision + 1, previousDocument);
       this.state = nextState;
       this.bumpRevision();
       return;
@@ -379,7 +389,7 @@ export class InterviewMemoryLedger extends EventEmitter {
     this.bumpRevision();
   }
 
-  public applyScreenAnalysis(analysis: InterviewScreenAnalysis): void {
+  public applyScreenAnalysis(analysis: InterviewScreenAnalysis): boolean {
     const nextCode: InterviewCodeSnapshot | null = analysis.currentCode
       ? {
           content: analysis.currentCode,
@@ -397,10 +407,11 @@ export class InterviewMemoryLedger extends EventEmitter {
       previousDocument.savedContexts.screen,
       analysis
     );
+    const screenUpdated = hasScreenAnalysisUpdate(this.state, previousDocument, screenContext, nextCode, analysis);
     const nextDocument = this.documentComposer.withSavedScreenContext(
       previousDocument,
       screenContext,
-      'Updated: Screen Context'
+      screenUpdated ? 'Updated: Screen Sync' : 'No updates found'
     );
 
     this.state = withMainScrollOffset({
@@ -443,7 +454,11 @@ export class InterviewMemoryLedger extends EventEmitter {
       lastScreenshotPath: analysis.screenshotPath,
       lastScreenshotPreview: analysis.screenshotPreview || this.state.lastScreenshotPreview,
     });
+    if (screenUpdated) {
+      this.requestFreshPhaseGeneration(activePhase, this.state.inputRevision + 1, previousDocument);
+    }
     this.bumpRevision();
+    return screenUpdated;
   }
 
   public applyGeneratedPayload(
@@ -563,7 +578,80 @@ export class InterviewMemoryLedger extends EventEmitter {
           }
         : null,
       latestPayload: this.state.latestPayload ? clonePayload(this.state.latestPayload) : null,
+      fetchIndicators: cloneFetchIndicators(this.state.fetchIndicators),
     };
+  }
+
+  public beginFetch(kind: keyof InterviewFetchIndicators, message: string): void {
+    const current = this.state.fetchIndicators[kind];
+    const nextIndicator: InterviewFetchIndicator = {
+      state: 'running',
+      message,
+      triggeredAt: Date.now(),
+    };
+
+    this.state = {
+      ...this.state,
+      fetchIndicators: {
+        ...cloneFetchIndicators(this.state.fetchIndicators),
+        [kind]: nextIndicator,
+      },
+    };
+    this.emitUpdate();
+  }
+
+  public completeFetch(
+    kind: keyof InterviewFetchIndicators,
+    state: InterviewFetchIndicator['state'],
+    message: string
+  ): void {
+    const current = this.state.fetchIndicators[kind];
+    const nextIndicator: InterviewFetchIndicator = {
+      state,
+      message,
+      triggeredAt: current.triggeredAt || Date.now(),
+    };
+
+    this.state = {
+      ...this.state,
+      fetchIndicators: {
+        ...cloneFetchIndicators(this.state.fetchIndicators),
+        [kind]: nextIndicator,
+      },
+    };
+    this.emitUpdate();
+  }
+
+  public consumeFreshPhaseGeneration(phase: RenderableInterviewPhase, revision: number): boolean {
+    const targetRevision = this.phaseRefreshTargets[phase];
+    if (targetRevision === null || revision < targetRevision) {
+      return false;
+    }
+
+    this.phaseRefreshTargets[phase] = null;
+    return true;
+  }
+
+  public markPhaseForFreshGeneration(phase: RenderableInterviewPhase, targetRevision: number): void {
+    const currentTarget = this.phaseRefreshTargets[phase];
+    this.phaseRefreshTargets[phase] = currentTarget === null
+      ? targetRevision
+      : Math.max(currentTarget, targetRevision);
+  }
+
+  private requestFreshPhaseGeneration(
+    phase: RenderableInterviewPhase,
+    targetRevision: number,
+    previousDocument: InterviewPhaseDocument
+  ): void {
+    if (!shouldForceFreshGeneration(previousDocument)) {
+      return;
+    }
+
+    const currentTarget = this.phaseRefreshTargets[phase];
+    this.phaseRefreshTargets[phase] = currentTarget === null
+      ? targetRevision
+      : Math.max(currentTarget, targetRevision);
   }
 
   private bumpRevision(): void {
@@ -613,6 +701,23 @@ function buildFollowUpFromPayload(
   };
 }
 
+function hasScreenAnalysisUpdate(
+  snapshot: InterviewSessionSnapshot,
+  previousDocument: InterviewPhaseDocument,
+  nextScreenContext: InterviewSavedContext,
+  nextCode: InterviewCodeSnapshot | null,
+  analysis: InterviewScreenAnalysis
+): boolean {
+  return !savedContextEquals(previousDocument.savedContexts.screen, nextScreenContext)
+    || (nextCode?.content || '') !== (snapshot.currentCode?.content || '')
+    || Boolean(analysis.problemStatement && analysis.problemStatement !== snapshot.problemStatement)
+    || hasNovelValues(snapshot.constraints, analysis.givenConstraints)
+    || hasNovelValues(snapshot.examples, analysis.examples)
+    || hasNovelValues(snapshot.openQuestions, analysis.visibleQuestions)
+    || hasNovelValues(snapshot.requirementChanges, analysis.hints)
+    || hasNovelValues(snapshot.clarifiedFacts, analysis.givenConstraints);
+}
+
 function withMainScrollOffset(snapshot: InterviewSessionSnapshot): InterviewSessionSnapshot {
   const activeDocument = getActivePhaseDocument(snapshot);
   return {
@@ -637,6 +742,31 @@ function createEmptyPhaseDocuments(): InterviewPhaseDocumentMap {
     p4_code: createEmptyPhaseDocument('p4_code'),
     p5_test: createEmptyPhaseDocument('p5_test'),
     p6_follow_up: createEmptyPhaseDocument('p6_follow_up'),
+  };
+}
+
+function createEmptyFetchIndicators(): InterviewFetchIndicators {
+  return {
+    next: createEmptyFetchIndicator(),
+    sync: createEmptyFetchIndicator(),
+  };
+}
+
+function createEmptyFetchIndicator(): InterviewFetchIndicator {
+  return {
+    state: 'idle',
+    message: 'Waiting',
+    triggeredAt: null,
+  };
+}
+
+function createEmptyPhaseRefreshTargets(): Record<RenderableInterviewPhase, number | null> {
+  return {
+    p2_clarify: null,
+    p3_approach: null,
+    p4_code: null,
+    p5_test: null,
+    p6_follow_up: null,
   };
 }
 
@@ -705,6 +835,13 @@ function clonePhaseHandoffs(handoffs: InterviewPhaseHandoffMap): InterviewPhaseH
     p4_code: clonePhaseHandoff(handoffs.p4_code),
     p5_test: clonePhaseHandoff(handoffs.p5_test),
     p6_follow_up: clonePhaseHandoff(handoffs.p6_follow_up),
+  };
+}
+
+function cloneFetchIndicators(indicators: InterviewFetchIndicators): InterviewFetchIndicators {
+  return {
+    next: { ...indicators.next },
+    sync: { ...indicators.sync },
   };
 }
 
@@ -797,6 +934,42 @@ function clonePayload(payload: InterviewOverlayPayload): InterviewOverlayPayload
         }
       : undefined,
   };
+}
+
+function shouldForceFreshGeneration(document: InterviewPhaseDocument): boolean {
+  const hasLines = document.mainFeed.some((entry) => entry.type === 'line' && Boolean(entry.text));
+  if (!hasLines) {
+    return false;
+  }
+
+  const blockCount = document.mainFeed.filter((entry) => entry.type === 'header').length;
+  return blockCount <= 1 || isLikelyIncompletePhaseDocument(document);
+}
+
+function savedContextEquals(left: InterviewSavedContext, right: InterviewSavedContext): boolean {
+  if (left.updatedAt !== right.updatedAt || left.lines.length !== right.lines.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.lines.length; index += 1) {
+    if (left.lines[index] !== right.lines[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function hasNovelValues(existing: string[], incoming: string[] | undefined): boolean {
+  if (!incoming || incoming.length === 0) {
+    return false;
+  }
+
+  const existingKeys = new Set(existing.map((item) => item.trim().toLowerCase()).filter(Boolean));
+  return incoming.some((item) => {
+    const normalized = item.trim().toLowerCase();
+    return Boolean(normalized) && !existingKeys.has(normalized);
+  });
 }
 
 function dedupe(items: string[]): string[] {

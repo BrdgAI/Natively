@@ -2,6 +2,12 @@ import { EventEmitter } from 'events';
 import type { AppState } from '../main';
 import { LLMHelper } from '../LLMHelper';
 import { InterviewClarifyPlanner } from './InterviewClarifyPlanner';
+import {
+  isLikelyIncompleteMainLines,
+  isLikelyIncompletePhaseDocument,
+  isRepairableLinePair,
+  normalizeInterviewLine,
+} from './InterviewContentHealth';
 import { InterviewDiffEngine } from './InterviewDiffEngine';
 import { InterviewMainDocComposer } from './InterviewMainDocComposer';
 import { InterviewMemoryLedger } from './InterviewMemoryLedger';
@@ -146,31 +152,49 @@ export class InterviewOrchestrator extends EventEmitter {
       return snapshot;
     }
 
-    const currentPhase = normalizePhase(snapshot.manualOverridePhase || snapshot.phase);
-    if (
-      snapshot.latestPayload &&
-      snapshot.latestPayload.inputRevision === snapshot.inputRevision &&
-      snapshot.latestPayload.phase === currentPhase
-    ) {
-      this.publishNoUpdate(snapshot.latestPayload);
+    this.ledger.beginFetch('next', 'Fetching...');
+    try {
+      const currentPhase = normalizePhase(snapshot.manualOverridePhase || snapshot.phase);
+      const shouldRetryCurrentPhase = shouldRetryIncompletePhase(snapshot, currentPhase);
+      if (
+        snapshot.latestPayload &&
+        snapshot.latestPayload.inputRevision === snapshot.inputRevision &&
+        snapshot.latestPayload.phase === currentPhase &&
+        !shouldRetryCurrentPhase
+      ) {
+        this.publishNoUpdate(snapshot.latestPayload);
+        return this.ledger.getSnapshot();
+      }
+
+      if (shouldRetryCurrentPhase) {
+        this.buffer.invalidatePhase(currentPhase);
+        this.ledger.markPhaseForFreshGeneration(currentPhase, snapshot.inputRevision);
+      }
+
+      const buffered = this.buffer.get(currentPhase, snapshot.inputRevision);
+
+      if (buffered && !shouldRetryBufferedPayload(buffered.payload)) {
+        this.publishBufferedPayload(buffered);
+        return this.ledger.getSnapshot();
+      }
+
+      if (buffered) {
+        this.buffer.invalidatePhase(currentPhase);
+      }
+
+      this.ledger.setGenerating(true, 'Preparing the next script...');
+      const payload = await this.generatePayload(currentPhase);
+      this.buffer.set(currentPhase, snapshot.inputRevision, payload);
+      const entry = this.buffer.get(currentPhase, snapshot.inputRevision);
+      if (entry) {
+        this.publishBufferedPayload(entry);
+      }
+      return this.ledger.getSnapshot();
+    } catch (error) {
+      this.ledger.setGenerating(false, `Next failed: ${toErrorMessage(error)}`);
+      this.ledger.completeFetch('next', 'unchanged', 'Fetch failed');
       return this.ledger.getSnapshot();
     }
-
-    const buffered = this.buffer.get(currentPhase, snapshot.inputRevision);
-
-    if (buffered) {
-      this.publishBufferedPayload(buffered);
-      return this.ledger.getSnapshot();
-    }
-
-    this.ledger.setGenerating(true, 'Preparing the next script...');
-    const payload = await this.generatePayload(currentPhase);
-    this.buffer.set(currentPhase, snapshot.inputRevision, payload);
-    const entry = this.buffer.get(currentPhase, snapshot.inputRevision);
-    if (entry) {
-      this.publishBufferedPayload(entry);
-    }
-    return this.ledger.getSnapshot();
   }
 
   public async handleSync(): Promise<InterviewSessionSnapshot> {
@@ -179,6 +203,7 @@ export class InterviewOrchestrator extends EventEmitter {
       return snapshot;
     }
 
+    this.ledger.beginFetch('sync', 'Syncing...');
     this.ledger.setSyncing(true, 'Syncing screen context...');
     try {
       const screenshotPath = await this.appState.takeScreenshot(false);
@@ -186,15 +211,17 @@ export class InterviewOrchestrator extends EventEmitter {
       const analysis = await this.visionSync.analyze(snapshot.phase, screenshotPath, preview, this.ledger.getRecentTranscript());
       this.lastScreenAnalysis = analysis;
 
-      this.ledger.applyScreenAnalysis(analysis);
+      const screenUpdated = this.ledger.applyScreenAnalysis(analysis);
       this.refreshPhase();
       this.buffer.invalidateAll();
       this.schedulePrefetch('sync');
       this.ledger.showControlStrip(buildControlStripHint(this.ledger.getSnapshot()), CONTROL_STRIP_DURATION_MS);
       this.ledger.setSyncing(false, 'Screen synced');
+      this.ledger.completeFetch('sync', screenUpdated ? 'updated' : 'unchanged', screenUpdated ? 'Updated' : 'No updates found');
       return this.ledger.getSnapshot();
     } catch (error) {
       this.ledger.setSyncing(false, `Screen sync failed: ${toErrorMessage(error)}`);
+      this.ledger.completeFetch('sync', 'unchanged', 'Sync failed');
       return this.ledger.getSnapshot();
     }
   }
@@ -326,14 +353,21 @@ export class InterviewOrchestrator extends EventEmitter {
       : snapshot;
     const previousDocument = composedSnapshot.phaseDocuments[entry.phase];
     const diffText = this.buildDiffText(composedSnapshot, entry.payload);
+    const forceFreshContent = this.ledger.consumeFreshPhaseGeneration(entry.phase, entry.payload.inputRevision);
     const phaseDocument = this.documentComposer.compose(composedSnapshot, entry.payload, {
       clarificationItems,
       savedContexts: previousDocument.savedContexts,
       diffText,
+      forceFreshContent,
     });
     const phaseHandoff = buildPhaseHandoff(composedSnapshot, entry.payload, phaseDocument, clarificationItems);
 
     this.ledger.applyGeneratedPayload(entry.payload, phaseDocument, clarificationItems, phaseHandoff);
+    this.ledger.completeFetch(
+      'next',
+      phaseDocument.status.status === 'updated' ? 'updated' : 'unchanged',
+      phaseDocument.status.message
+    );
   }
 
   private buildDiffText(snapshot: InterviewSessionSnapshot, payload: InterviewOverlayPayload): string | null {
@@ -353,7 +387,7 @@ export class InterviewOrchestrator extends EventEmitter {
     const snapshot = this.ledger.getSnapshot();
     const phaseDocument = this.documentComposer.withNoUpdate(
       snapshot.phaseDocuments[payload.phase],
-      'No updates'
+      'No updates found'
     );
     const derived: InterviewOverlayPayload = {
       ...payload,
@@ -365,6 +399,7 @@ export class InterviewOrchestrator extends EventEmitter {
     };
     const phaseHandoff = buildPhaseHandoff(snapshot, derived, phaseDocument);
     this.ledger.applyGeneratedPayload(derived, phaseDocument, undefined, phaseHandoff);
+    this.ledger.completeFetch('next', 'unchanged', phaseDocument.status.message);
   }
 }
 
@@ -512,4 +547,50 @@ function toErrorMessage(error: Error | string | number | boolean | null | undefi
     return error.message;
   }
   return String(error);
+}
+
+function shouldRetryBufferedPayload(payload: InterviewOverlayPayload): boolean {
+  return isLikelyIncompleteMainLines(payload.mainLines)
+    || hasClarificationCoverageGap(payload);
+}
+
+function shouldRetryIncompletePhase(
+  snapshot: InterviewSessionSnapshot,
+  phase: RenderableInterviewPhase
+): boolean {
+  if (!snapshot.latestPayload || snapshot.latestPayload.phase !== phase) {
+    return false;
+  }
+
+  if (snapshot.latestPayload.inputRevision !== snapshot.inputRevision) {
+    return false;
+  }
+
+  return isLikelyIncompleteMainLines(snapshot.latestPayload.mainLines)
+    || hasClarificationCoverageGap(snapshot.latestPayload)
+    || isLikelyIncompletePhaseDocument(snapshot.phaseDocuments[phase], snapshot.clarificationItems);
+}
+
+function hasClarificationCoverageGap(payload: InterviewOverlayPayload): boolean {
+  if (payload.phase !== 'p2_clarify' || !payload.clarificationQuestions || payload.clarificationQuestions.length === 0) {
+    return false;
+  }
+
+  const lines = payload.mainLines
+    .map((line) => normalizeInterviewLine(line))
+    .filter(Boolean);
+
+  return payload.clarificationQuestions.some((question) => {
+    const normalizedQuestion = normalizeInterviewLine(question.text);
+    if (!normalizedQuestion) {
+      return false;
+    }
+
+    return !lines.some((line) => {
+      return line === normalizedQuestion
+        || line.includes(normalizedQuestion)
+        || normalizedQuestion.includes(line)
+        || isRepairableLinePair(line, normalizedQuestion);
+    });
+  });
 }

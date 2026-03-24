@@ -4,6 +4,7 @@ import InterviewContextFooter from './InterviewContextFooter'
 import InterviewMainPanel from './InterviewMainPanel'
 import InterviewTopStrip from './InterviewTopStrip'
 import type {
+  InterviewFetchIndicators,
   InterviewPhaseDocumentMap,
   InterviewPhaseHandoffMap,
   InterviewSessionSnapshot,
@@ -30,6 +31,19 @@ const EMPTY_PHASE_HANDOFFS: InterviewPhaseHandoffMap = {
   p4_code: createEmptyPhaseHandoff(),
   p5_test: createEmptyPhaseHandoff(),
   p6_follow_up: createEmptyPhaseHandoff(),
+}
+
+const EMPTY_FETCH_INDICATORS: InterviewFetchIndicators = {
+  next: {
+    state: 'idle',
+    message: 'Waiting',
+    triggeredAt: null,
+  },
+  sync: {
+    state: 'idle',
+    message: 'Waiting',
+    triggeredAt: null,
+  },
 }
 
 const EMPTY_SNAPSHOT: InterviewSessionSnapshot = {
@@ -67,6 +81,7 @@ const EMPTY_SNAPSHOT: InterviewSessionSnapshot = {
   mainScrollOffset: 0,
   lastScreenshotPath: null,
   lastScreenshotPreview: null,
+  fetchIndicators: EMPTY_FETCH_INDICATORS,
 }
 
 const SCROLL_STEP = 220
@@ -215,8 +230,8 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
         className="absolute inset-0"
         style={{ background: 'rgba(8, 6, 4, 0.24)' }}
       />
-      <div className="relative z-10 h-full w-full px-3 pb-2 pt-2">
-        <div className="mx-auto flex h-full max-w-[1680px] flex-col gap-2">
+      <div className="relative z-10 h-full w-full px-2 pb-2 pt-2">
+        <div className="mx-auto flex h-full max-w-[2025px] flex-col gap-2">
           <InterviewTopStrip
             phase={snapshot.phase}
             manualOverridePhase={snapshot.manualOverridePhase}
@@ -231,10 +246,7 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
 
           <div
             className={[
-              'grid min-h-0 flex-1 gap-2',
-              hasSecondaryCode
-                ? 'xl:grid-cols-[minmax(0,1fr)_360px_320px]'
-                : 'xl:grid-cols-[minmax(0,1fr)_360px]',
+              'grid min-h-0 flex-1 gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(680px,44%)] 2xl:grid-cols-[minmax(0,1fr)_900px]',
             ].join(' ')}
           >
             <InterviewMainPanel
@@ -244,20 +256,29 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
               emptyMessage={snapshot.statusMessage || 'Press Cmd+Enter when you want the current phase document to load.'}
             />
 
-            <InterviewCodePanel
-              codePane={activeDocument.primaryCode}
-              emptyMessage="Primary code will appear here once coding starts or after screen sync captures visible code."
-            />
-
-            {hasSecondaryCode && (
+            <div
+              className={[
+                'grid min-h-0 gap-2',
+                hasSecondaryCode
+                  ? 'grid-cols-[minmax(0,1fr)_300px]'
+                  : 'grid-cols-1',
+              ].join(' ')}
+            >
               <InterviewCodePanel
-                codePane={activeDocument.secondaryCode}
-                emptyMessage="No changes yet."
+                codePane={activeDocument.primaryCode}
+                emptyMessage="Primary code will appear here once coding starts or after screen sync captures visible code."
               />
-            )}
+
+              {hasSecondaryCode && (
+                <InterviewCodePanel
+                  codePane={activeDocument.secondaryCode}
+                  emptyMessage="No changes yet."
+                />
+              )}
+            </div>
           </div>
 
-          <InterviewContextFooter savedContexts={activeDocument.savedContexts} />
+          <InterviewContextFooter fetchIndicators={snapshot.fetchIndicators} />
         </div>
       </div>
     </div>

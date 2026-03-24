@@ -74,6 +74,19 @@ export interface InterviewSavedContexts {
   normal: InterviewSavedContext
 }
 
+export type InterviewFetchIndicatorState = 'idle' | 'running' | 'updated' | 'unchanged'
+
+export interface InterviewFetchIndicator {
+  state: InterviewFetchIndicatorState
+  message: string
+  triggeredAt: number | null
+}
+
+export interface InterviewFetchIndicators {
+  next: InterviewFetchIndicator
+  sync: InterviewFetchIndicator
+}
+
 export interface InterviewRenderStatus {
   status: InterviewUpdateStatus
   updatedSections: string[]
@@ -185,4 +198,5 @@ export interface InterviewSessionSnapshot {
   mainScrollOffset: number
   lastScreenshotPath: string | null
   lastScreenshotPreview: string | null
+  fetchIndicators: InterviewFetchIndicators
 }

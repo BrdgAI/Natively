@@ -79,7 +79,7 @@ export class RateLimiter {
  */
 export function createProviderRateLimiters() {
     return {
-        groq: new RateLimiter(6, 0.1),        // 6 req/min
+        groq: new RateLimiter(15, 0.4),       // Higher burst for Groq text workloads
         gemini: new RateLimiter(120, 2.0),    // 120 req/min
         openai: new RateLimiter(120, 2.0),    // 120 req/min
         claude: new RateLimiter(120, 2.0),    // 120 req/min

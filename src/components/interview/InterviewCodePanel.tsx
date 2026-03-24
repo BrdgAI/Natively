@@ -9,7 +9,7 @@ interface InterviewCodePanelProps {
 
 const InterviewCodePanel: React.FC<InterviewCodePanelProps> = ({ codePane, emptyMessage }) => {
   return (
-    <div className="interview-surface-primary pointer-events-auto flex min-h-0 flex-col rounded-[10px] px-1.5 py-1.5">
+    <div className="interview-surface-primary pointer-events-auto flex min-h-0 min-w-0 flex-col rounded-[10px] px-1.5 py-1.5">
       <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
         <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#f0e4d2] interview-text-heading">
           <FileCode2 size={12} />
@@ -39,8 +39,8 @@ const InterviewCodePanel: React.FC<InterviewCodePanelProps> = ({ codePane, empty
                   {index + 1}
                 </span>
                 <span
-                  className="whitespace-pre text-[12px] font-mono leading-[1.45] text-[#eadfcd]"
-                  style={{ fontFamily: 'var(--font-interview-code)' }}
+                  className="min-w-0 whitespace-pre-wrap break-words text-[12px] font-mono leading-[1.45] text-[#eadfcd]"
+                  style={{ fontFamily: 'var(--font-interview-code)', overflowWrap: 'anywhere' }}
                 >
                   {line || ' '}
                 </span>
