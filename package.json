@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "npm run clean && tsc && vite build",
     "check:electron-entrypoint": "node scripts/check-electron-entrypoint.js",
-    "build:electron": "tsc -p electron/tsconfig.json && npm run check:electron-entrypoint",
+    "build:electron": "tsc -p electron/tsconfig.json && node scripts/copy-interview-instructions.js && npm run check:electron-entrypoint",
     "preview": "vite preview",
     "postinstall": "cross-env SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm rebuild sharp && node scripts/download-models.js && node scripts/ensure-sqlite-vec.js",
     "electron:dev": "npm run build:electron && cross-env NODE_ENV=development electron .",
