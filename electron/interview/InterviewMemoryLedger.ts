@@ -443,14 +443,22 @@ export class InterviewMemoryLedger extends EventEmitter {
     phaseHandoff?: InterviewPhaseHandoff
   ): void {
     const nextCode: InterviewCodeSnapshot | null = payload.codePanel
-      ? {
-          content: payload.codePanel.content,
-          narration: payload.codePanel.narration,
-          mode: payload.codePanel.mode,
-          capturedAt: payload.generatedAt,
-          suspectedMistakes: payload.codePanel.suspectedMistakes,
-          source: payload.codePanel.mode === 'diff' ? 'diff' : 'generator',
-        }
+      ? payload.codePanel.mode === 'diff' && this.state.currentCode
+        ? {
+            ...this.state.currentCode,
+            capturedAt: payload.generatedAt,
+            suspectedMistakes: payload.codePanel.suspectedMistakes.length > 0
+              ? payload.codePanel.suspectedMistakes
+              : this.state.currentCode.suspectedMistakes,
+          }
+        : {
+            content: payload.codePanel.content,
+            narration: payload.codePanel.narration,
+            mode: payload.codePanel.mode,
+            capturedAt: payload.generatedAt,
+            suspectedMistakes: payload.codePanel.suspectedMistakes,
+            source: payload.codePanel.mode === 'diff' ? 'diff' : 'generator',
+          }
       : this.state.currentCode;
 
     const phaseDocuments = {

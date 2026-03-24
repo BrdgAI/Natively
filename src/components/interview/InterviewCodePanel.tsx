@@ -8,43 +8,51 @@ interface InterviewCodePanelProps {
 }
 
 const InterviewCodePanel: React.FC<InterviewCodePanelProps> = ({ snapshot, document }) => {
-  const codePanel = document.codePanel || mapSnapshotCode(snapshot)
+  const codePanel = resolveCodePanel(snapshot, document)
 
   return (
-    <div className="interview-surface pointer-events-auto flex min-h-[280px] flex-col rounded-[10px] px-3 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[12px] font-bold tracking-[0.01em] text-[#211c18]">
-          <FileCode2 size={14} />
+    <div className="interview-surface-primary pointer-events-auto flex flex-col rounded-[10px] px-2 py-2">
+      <div className="flex items-center justify-between gap-2 px-1 mb-1.5">
+        <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#1e1408] interview-text-heading">
+          <FileCode2 size={12} />
           <span>Code</span>
         </div>
         {codePanel && (
-          <div className="flex items-center gap-2 text-[10px] font-semibold text-[#5f5146]">
-            <span className="rounded-[7px] border border-[#d0c6bd] bg-[rgba(255,252,248,0.6)] px-2 py-1">{codePanel.language.toUpperCase()}</span>
-            <span className="rounded-[7px] border border-[#d0c6bd] bg-[rgba(255,252,248,0.6)] px-2 py-1">{codePanel.mode.toUpperCase()}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="interview-item-pill rounded-[4px] border border-[rgba(71,58,48,0.14)] px-1.5 py-0.5 text-[9px] font-semibold text-[#5a4828] interview-text">{codePanel.language.toUpperCase()}</span>
+            <span className="interview-item-pill rounded-[4px] border border-[rgba(71,58,48,0.14)] px-1.5 py-0.5 text-[9px] font-semibold text-[#5a4828] interview-text">{codePanel.mode.toUpperCase()}</span>
           </div>
         )}
       </div>
 
       {codePanel ? (
         <>
-          <div className="mt-2 min-h-0 flex-1 overflow-auto rounded-[9px] border border-[#d7cdc4] bg-[rgba(255,253,250,0.72)] px-2 py-2 font-mono text-[11px] leading-[1.45] text-[#1f1a17]">
+          <div className="interview-code-surface min-h-0 flex-1 overflow-auto px-0 py-1">
             {codePanel.content.split('\n').map((line, index) => (
-              <div key={`${index}-${line}`} className={`grid grid-cols-[32px_minmax(0,1fr)] gap-2 px-1 py-[1px] ${lineClassName(codePanel.mode, line)}`}>
-                <span className="select-none text-right text-[10px] text-[#8b7e72]">{index + 1}</span>
-                <span className="whitespace-pre">{line || ' '}</span>
+              <div
+                key={`${index}-${line}`}
+                className={`grid grid-cols-[30px_minmax(0,1fr)] gap-1.5 px-1 py-[1px] ${lineClassName(codePanel.mode, line)}`}
+              >
+                <span className="select-none text-right text-[10px] font-mono text-[#6a5e50] leading-[1.45]">{index + 1}</span>
+                <span
+                  className="whitespace-pre text-[13px] font-mono leading-[1.45] text-[#e8dece]"
+                  style={{ fontFamily: 'var(--font-interview-code)' }}
+                >
+                  {line || ' '}
+                </span>
               </div>
             ))}
           </div>
 
           {codePanel.suspectedMistakes.length > 0 && (
-            <div className="mt-2 rounded-[9px] border border-[#d7c09e] bg-[rgba(250,241,229,0.8)] px-2.5 py-2">
-              <div className="flex items-center gap-2 text-[11px] font-bold text-[#69441f]">
-                <Bug size={12} />
+            <div className="mt-1.5 rounded-[7px] border border-[rgba(160,60,40,0.22)] bg-[rgba(250,235,228,0.82)] px-2 py-1.5">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#7a2818] interview-text-heading">
+                <Bug size={11} />
                 <span>Likely Mistakes</span>
               </div>
-              <div className="mt-1.5 space-y-1.5">
+              <div className="mt-1 space-y-1">
                 {codePanel.suspectedMistakes.map((line, index) => (
-                  <div key={`${line}-${index}`} className="text-[12px] leading-5 text-[#613d1d]">
+                  <div key={`${line}-${index}`} className="text-[11px] leading-5 text-[#5a2010] font-semibold interview-text">
                     {line}
                   </div>
                 ))}
@@ -53,8 +61,8 @@ const InterviewCodePanel: React.FC<InterviewCodePanelProps> = ({ snapshot, docum
           )}
         </>
       ) : (
-        <div className="mt-2 flex flex-1 items-center justify-center rounded-[9px] border border-dashed border-[#d0c6bd] bg-[rgba(255,252,248,0.55)] px-3 text-center text-[12px] leading-5 text-[#6c5f55]">
-          The code panel will stay here once coding begins or once `SYNC` captures visible code.
+        <div className="flex flex-1 items-center justify-center rounded-[7px] border border-dashed border-[rgba(71,58,48,0.14)] px-3 py-6 text-center text-[11px] leading-5 text-[#5a4030] interview-text">
+          Code panel loads once coding begins or after SYNC captures visible code.
         </div>
       )}
     </div>
@@ -65,7 +73,6 @@ function mapSnapshotCode(snapshot: InterviewSessionSnapshot): InterviewPhaseDocu
   if (!snapshot.currentCode) {
     return null
   }
-
   return {
     language: 'python',
     mode: snapshot.currentCode.mode,
@@ -75,16 +82,33 @@ function mapSnapshotCode(snapshot: InterviewSessionSnapshot): InterviewPhaseDocu
   }
 }
 
+function resolveCodePanel(
+  snapshot: InterviewSessionSnapshot,
+  document: InterviewPhaseDocument
+): InterviewPhaseDocument['codePanel'] {
+  if (
+    document.codePanel?.mode === 'diff'
+    && snapshot.currentCode
+    && snapshot.currentCode.mode !== 'diff'
+  ) {
+    return {
+      language: document.codePanel.language,
+      mode: snapshot.currentCode.mode,
+      content: snapshot.currentCode.content,
+      narration: snapshot.currentCode.narration,
+      suspectedMistakes: document.codePanel.suspectedMistakes.length > 0
+        ? document.codePanel.suspectedMistakes
+        : snapshot.currentCode.suspectedMistakes,
+    }
+  }
+
+  return document.codePanel || mapSnapshotCode(snapshot)
+}
+
 function lineClassName(mode: string, line: string): string {
-  if (mode !== 'diff') {
-    return ''
-  }
-  if (line.startsWith('+')) {
-    return 'interview-code-line-add'
-  }
-  if (line.startsWith('-')) {
-    return 'interview-code-line-remove'
-  }
+  if (mode !== 'diff') return ''
+  if (line.startsWith('+')) return 'interview-code-line-add'
+  if (line.startsWith('-')) return 'interview-code-line-remove'
   return 'interview-code-line-neutral'
 }
 

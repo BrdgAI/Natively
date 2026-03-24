@@ -16,23 +16,27 @@ const PHASES: Array<{ id: Exclude<InterviewPhase, 'p1_intro'>; label: string }> 
 
 const InterviewPhaseFlow: React.FC<InterviewPhaseFlowProps> = ({ activePhase, manualOverridePhase }) => {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {PHASES.map((phase) => {
+    <div className="flex items-center gap-1">
+      {PHASES.map((phase, index) => {
         const isActive = activePhase === phase.id
         const isManual = manualOverridePhase === phase.id
         return (
-          <div
-            key={phase.id}
-            className={[
-              'inline-flex items-center gap-1 rounded-[8px] border px-2.5 py-1 text-[11px] font-semibold',
-              isActive
-                ? 'border-[#3c332d] bg-[#201b18] text-[#f6f0ea]'
-                : 'border-[#b9aea4] bg-[rgba(252,249,244,0.58)] text-[#43362d]',
-            ].join(' ')}
-          >
-            <span>{phase.label}</span>
-            {isManual && <span className="text-[10px] text-[#9f8572]">manual</span>}
-          </div>
+          <React.Fragment key={phase.id}>
+            {index > 0 && (
+              <span className="text-[9px] text-[#a89070] select-none interview-text">·</span>
+            )}
+            <div
+              className={[
+                'inline-flex items-center gap-1 rounded-[6px] border px-2 py-0.5 text-[10px] font-semibold interview-text',
+                isActive
+                  ? 'border-[rgba(120,80,20,0.30)] bg-[rgba(200,130,25,0.18)] text-[#5a3208]'
+                  : 'interview-item-pill border-[rgba(71,58,48,0.12)] text-[#6a5030]',
+              ].join(' ')}
+            >
+              <span>{phase.label}</span>
+              {isManual && <span className="text-[9px] text-[#8a7050]">M</span>}
+            </div>
+          </React.Fragment>
         )
       })}
     </div>

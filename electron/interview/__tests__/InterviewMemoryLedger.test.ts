@@ -84,3 +84,52 @@ test('pause and resume preserve interview state during an active meeting', () =>
   assert.equal(resumed.mainScrollOffset, 320);
   assert.deepEqual(resumed.latestPayload?.speakNow, ['I want to confirm whether duplicate values are allowed.']);
 });
+
+test('diff payloads keep the full code snapshot available for the primary code panel', () => {
+  const ledger = new InterviewMemoryLedger();
+  const composer = new InterviewMainDocComposer();
+  ledger.startSession('interview', { codingLanguage: 'python' });
+
+  ledger.applyScreenAnalysis({
+    screenshotPath: '/tmp/interview-code.png',
+    capturedAt: Date.now(),
+    currentCode: 'def two_sum(nums, target):\n    return []',
+    likelyMistakes: [],
+  });
+
+  const snapshot = ledger.getSnapshot();
+  const payload: InterviewOverlayPayload = {
+    phase: 'p6_follow_up',
+    phaseConfidence: 0.95,
+    manualOverrideActive: false,
+    speakNow: ['I can make that change in the return path.'],
+    speakIfAsked: [],
+    writeNow: [],
+    thoughtNotes: [],
+    quickQuestions: [],
+    pinnedFacts: ['Only the return logic changes'],
+    changes: [],
+    codePanel: {
+      language: 'python',
+      mode: 'diff',
+      content: ' def two_sum(nums, target):\n-    return []\n+    return None',
+      narration: [],
+      suspectedMistakes: ['Change the return contract only'],
+    },
+    freshness: {
+      transcriptUpdatedMsAgo: 0,
+      screenshotUpdatedMsAgo: 0,
+      generatedMsAgo: 0,
+    },
+    generatedAt: Date.now(),
+    inputRevision: snapshot.inputRevision,
+  };
+
+  const phaseDocument = composer.compose(snapshot, payload);
+  ledger.applyGeneratedPayload(payload, phaseDocument);
+
+  const after = ledger.getSnapshot();
+  assert.equal(after.currentCode?.content, 'def two_sum(nums, target):\n    return []');
+  assert.equal(after.phaseDocuments.p6_follow_up.codePanel?.mode, 'diff');
+  assert.equal(after.phaseDocuments.p6_follow_up.codePanel?.content, ' def two_sum(nums, target):\n-    return []\n+    return None');
+});

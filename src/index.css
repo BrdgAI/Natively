@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @font-face {
   font-family: 'CelebMF';
   src: url('./font/Masterfont - Celeb MF Medium.otf') format('opentype');
@@ -21,7 +23,8 @@
 :root {
   /* System Fonts - SF Pro */
   --font-system: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  --font-interview: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, sans-serif;
+  --font-interview: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, sans-serif;
+  --font-interview-code: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, monospace;
 
   /* --- SEMANTIC TOKEN SYSTEM (DEFAULT: DARK) --- */
   /* Reference Image Matching */
@@ -260,27 +263,78 @@ body {
   border-color: var(--overlay-code-border);
 }
 
+/*
+ * Interview surfaces use a two-layer approach:
+ *   1. Panel shell = nearly transparent glass — lets the document show through
+ *   2. Individual rows/items = per-row opaque pill — keeps overlay text readable
+ * This mirrors how macOS Spotlight works: shell is glass, each result has its own backing.
+ */
+
 .interview-surface {
   font-family: var(--font-interview);
-  background: rgba(248, 244, 238, 0.68);
-  border: 1px solid rgba(71, 58, 48, 0.16);
-  box-shadow: 0 6px 20px rgba(34, 25, 19, 0.08);
-  backdrop-filter: blur(8px) saturate(118%);
-  -webkit-backdrop-filter: blur(8px) saturate(118%);
+  background: rgba(252, 247, 239, 0.22);
+  border: 1px solid rgba(71, 58, 48, 0.10);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+
+.interview-surface-primary {
+  font-family: var(--font-interview);
+  background: rgba(255, 251, 244, 0.20);
+  border: 1px solid rgba(71, 58, 48, 0.09);
+  backdrop-filter: blur(24px) saturate(148%);
+  -webkit-backdrop-filter: blur(24px) saturate(148%);
+}
+
+.interview-surface-strip {
+  font-family: var(--font-interview);
+  background: rgba(255, 251, 243, 0.24);
+  border: 1px solid rgba(71, 58, 48, 0.09);
+  backdrop-filter: blur(20px) saturate(142%);
+  -webkit-backdrop-filter: blur(20px) saturate(142%);
+}
+
+/* Per-row/item pill — the opaque layer that makes text legible */
+.interview-row {
+  background: rgba(255, 252, 244, 0.82);
+}
+
+.interview-row-alt {
+  background: rgba(250, 244, 232, 0.86);
+}
+
+.interview-item-pill {
+  background: rgba(255, 252, 244, 0.82);
+}
+
+/* Warm text shadow on all overlay body text so it pops regardless of bleed-through */
+.interview-text {
+  text-shadow: 0 0 8px rgba(255, 248, 234, 1), 0 1px 2px rgba(255, 248, 234, 0.9);
+}
+
+.interview-text-heading {
+  text-shadow: 0 0 6px rgba(255, 248, 234, 1), 0 1px 3px rgba(255, 246, 228, 0.95);
+}
+
+/* Dark code viewer surface — only used inside code/diff panels */
+.interview-code-surface {
+  background: rgba(22, 17, 12, 0.82);
+  border: 1px solid rgba(255, 210, 150, 0.10);
+  border-radius: 7px;
 }
 
 .interview-code-line-add {
-  background: rgba(115, 164, 121, 0.16);
-  color: #244227;
+  background: rgba(60, 140, 80, 0.20);
+  color: #1a5e2a;
 }
 
 .interview-code-line-remove {
-  background: rgba(185, 111, 92, 0.16);
-  color: #6b2f22;
+  background: rgba(180, 60, 50, 0.18);
+  color: #7a2218;
 }
 
 .interview-code-line-neutral {
-  background: rgba(73, 59, 48, 0.05);
+  background: transparent;
 }
 
 .overlay-code-header-surface {

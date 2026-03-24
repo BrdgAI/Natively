@@ -2,12 +2,18 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import InterviewCodePanel from './InterviewCodePanel'
 import InterviewControlStrip from './InterviewControlStrip'
+import InterviewDiffPanel from './InterviewDiffPanel'
 import InterviewExtractedTextPanel from './InterviewExtractedTextPanel'
 import InterviewMainPanel from './InterviewMainPanel'
 import InterviewNotesRail from './InterviewNotesRail'
-import InterviewQuickAnswersPanel from './InterviewQuickAnswersPanel'
 import InterviewTopStrip from './InterviewTopStrip'
-import type { InterviewPhaseDocumentMap, InterviewPhaseHandoffMap, InterviewSessionSnapshot, RenderableInterviewPhase } from '../../types/interview'
+import type {
+  InterviewExtractedTextSummary,
+  InterviewPhaseDocumentMap,
+  InterviewPhaseHandoffMap,
+  InterviewSessionSnapshot,
+  RenderableInterviewPhase,
+} from '../../types/interview'
 import { useShortcuts } from '../../hooks/useShortcuts'
 
 interface InterviewOverlayProps {
@@ -76,8 +82,6 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
   const [snapshot, setSnapshot] = useState<InterviewSessionSnapshot>(EMPTY_SNAPSHOT)
   const [now, setNow] = useState(Date.now())
   const [mousePassthrough, setMousePassthrough] = useState(true)
-  const [textModelLabel, setTextModelLabel] = useState('Text from settings')
-  const [sttLabel, setSttLabel] = useState('STT from settings')
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollTimerRef = useRef<number | null>(null)
   const { isShortcutPressed } = useShortcuts()
@@ -105,18 +109,6 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
     window.electronAPI?.getInterviewState?.().then((nextSnapshot) => {
       if (mounted && nextSnapshot) {
         setSnapshot(nextSnapshot)
-      }
-    }).catch(() => {})
-
-    window.electronAPI?.getCurrentLlmConfig?.().then((config) => {
-      if (mounted && config) {
-        setTextModelLabel(`${capitalize(config.provider)} ${config.model}`)
-      }
-    }).catch(() => {})
-
-    window.electronAPI?.getSttProvider?.().then((provider) => {
-      if (mounted && provider) {
-        setSttLabel(`STT ${capitalize(provider)}`)
       }
     }).catch(() => {})
 
@@ -186,6 +178,13 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
 
   const isControlStripVisible = Boolean(snapshot.controlStripVisibleUntil && snapshot.controlStripVisibleUntil > now)
 
+  const showDiffPanel = Boolean(
+    activeDocument.codePanel?.mode === 'diff'
+      && (activePhase === 'p4_code' || activePhase === 'p6_follow_up')
+  )
+
+  const showExtractedText = hasExtractedContent(activeDocument.extractedText)
+
   const handleNext = async () => {
     const nextSnapshot = await window.electronAPI?.interviewNext?.()
     if (nextSnapshot) {
@@ -242,24 +241,17 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
     >
       <div
         className="absolute inset-0"
-        style={{ background: 'rgba(26, 23, 20, 0.14)' }}
+        style={{ background: 'rgba(0, 0, 0, 0.04)' }}
       />
-      <div className="relative z-10 h-full w-full px-4 pb-4 pt-3">
-        <div className="mx-auto flex h-full max-w-[1580px] flex-col gap-3">
+      <div className="relative z-10 h-full w-full px-3 pb-2 pt-2">
+        <div className="mx-auto flex h-full max-w-[1640px] flex-col gap-2">
           <InterviewTopStrip
             phase={snapshot.phase}
-            phaseConfidence={snapshot.phaseConfidence}
             manualOverridePhase={snapshot.manualOverridePhase}
             routingMode={snapshot.routingMode}
-            statusMessage={snapshot.statusMessage}
-            lastTranscriptSnippet={snapshot.lastTranscriptSnippet}
-            lastTranscriptAt={snapshot.lastTranscriptAt}
-            lastScreenshotAt={snapshot.lastScreenshotAt}
+            isGenerating={snapshot.isGenerating}
             mousePassthrough={mousePassthrough}
-            textModelLabel={textModelLabel}
-            sttLabel={sttLabel}
             updateSummary={activeDocument.updateSummary}
-            now={now}
             onNext={handleNext}
             onSync={handleSync}
             onExitInterviewMode={handleExitInterviewMode}
@@ -279,7 +271,14 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
             )}
           </AnimatePresence>
 
-          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1.35fr)_430px]">
+          <div
+            className={[
+              'grid min-h-0 flex-1 gap-2',
+              showDiffPanel
+                ? 'xl:grid-cols-[minmax(0,1fr)_500px_280px]'
+                : 'xl:grid-cols-[minmax(0,1fr)_500px]',
+            ].join(' ')}
+          >
             <InterviewMainPanel
               snapshot={snapshot}
               document={activeDocument}
@@ -287,14 +286,22 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
               onScroll={handleScroll}
             />
 
-            <div className="grid min-h-0 gap-3 xl:grid-rows-[minmax(0,1fr)_auto_auto]">
+            <div className="grid min-h-0 gap-2 xl:grid-rows-[minmax(0,1fr)_auto]">
               <InterviewCodePanel snapshot={snapshot} document={activeDocument} />
-              <InterviewQuickAnswersPanel items={activeDocument.quickAnswers} />
-              <InterviewNotesRail snapshot={snapshot} />
+              <InterviewNotesRail snapshot={snapshot} phase={activePhase} />
             </div>
+
+            {showDiffPanel && (
+              <InterviewDiffPanel
+                codePanel={activeDocument.codePanel}
+                phase={activePhase}
+              />
+            )}
           </div>
 
-          <InterviewExtractedTextPanel extractedText={activeDocument.extractedText} />
+          {showExtractedText && (
+            <InterviewExtractedTextPanel extractedText={activeDocument.extractedText} />
+          )}
         </div>
       </div>
     </div>
@@ -359,11 +366,13 @@ function formatPhase(phase: RenderableInterviewPhase): string {
   }
 }
 
-function capitalize(value: string): string {
-  if (!value) {
-    return ''
-  }
-  return value.charAt(0).toUpperCase() + value.slice(1)
+function hasExtractedContent(e: InterviewExtractedTextSummary): boolean {
+  return Boolean(
+    e.problemText
+    || e.requirementDelta.length > 0
+    || e.dryRunInput
+    || e.codeObservations.length > 0
+  )
 }
 
 export default InterviewOverlay
