@@ -1,11 +1,19 @@
 import React, { useEffect, useState } from 'react'
-import type { InterviewFetchIndicator, InterviewFetchIndicators } from '../../types/interview'
+import type {
+  InterviewFetchIndicator,
+  InterviewFetchIndicators,
+  InterviewTranscriptMemoryStats,
+} from '../../types/interview'
 
 interface InterviewContextFooterProps {
   fetchIndicators: InterviewFetchIndicators
+  transcriptMemory: InterviewTranscriptMemoryStats
 }
 
-const InterviewContextFooter: React.FC<InterviewContextFooterProps> = ({ fetchIndicators }) => {
+const InterviewContextFooter: React.FC<InterviewContextFooterProps> = ({
+  fetchIndicators,
+  transcriptMemory,
+}) => {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -17,7 +25,7 @@ const InterviewContextFooter: React.FC<InterviewContextFooterProps> = ({ fetchIn
   }, [])
 
   return (
-    <div className="grid gap-2 xl:grid-cols-2">
+    <div className="grid gap-2 xl:grid-cols-3">
       <StatusCard
         title="Last Normal Fetch"
         shortcut="⌘↵"
@@ -30,6 +38,7 @@ const InterviewContextFooter: React.FC<InterviewContextFooterProps> = ({ fetchIn
         indicator={fetchIndicators.sync}
         now={now}
       />
+      <MemoryCard transcriptMemory={transcriptMemory} now={now} />
     </div>
   )
 }
@@ -62,6 +71,52 @@ const StatusCard = ({
       <span className="shrink-0 text-[10px] font-semibold text-[#cebca4] interview-text">
         {formatTriggeredAt(indicator.triggeredAt, now)}
       </span>
+    </div>
+  </div>
+)
+
+const MemoryCard = ({
+  transcriptMemory,
+  now,
+}: {
+  transcriptMemory: InterviewTranscriptMemoryStats
+  now: number
+}) => (
+  <div className="interview-surface pointer-events-auto rounded-[8px] px-2 py-1.5">
+    <div className="flex items-center justify-between gap-2">
+      <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-[#f0dfc5] interview-text-heading">
+        Transcript Memory
+      </div>
+      <span className="rounded-[5px] border border-[rgba(255,220,180,0.12)] bg-[rgba(255,255,255,0.06)] px-1.5 py-0.5 text-[9px] font-semibold text-[#f0dfc5] interview-text">
+        compact
+      </span>
+    </div>
+
+    <div className="mt-1 grid grid-cols-3 gap-1.5 rounded-[7px] border border-[rgba(255,220,180,0.10)] bg-[rgba(255,255,255,0.04)] px-2 py-1.5">
+      <MemoryStat label="Recent finals" value={String(transcriptMemory.finalSegmentCount)} />
+      <MemoryStat label="Epochs" value={String(transcriptMemory.epochCount)} />
+      <MemoryStat label="Compacted" value={String(transcriptMemory.compactedSegmentCount)} />
+    </div>
+
+    <div className="mt-1 text-[10px] font-semibold text-[#cebca4] interview-text">
+      Last compacted: {formatTriggeredAt(transcriptMemory.lastCompactedAt, now)}
+    </div>
+  </div>
+)
+
+const MemoryStat = ({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) => (
+  <div className="rounded-[6px] border border-[rgba(255,220,180,0.08)] bg-[rgba(255,255,255,0.03)] px-1.5 py-1">
+    <div className="text-[9px] font-semibold uppercase tracking-[0.04em] text-[#cebca4] interview-text">
+      {label}
+    </div>
+    <div className="mt-0.5 text-[12px] font-bold text-[#f0dfc5] interview-text-heading">
+      {value}
     </div>
   </div>
 )

@@ -82,6 +82,12 @@ const EMPTY_SNAPSHOT: InterviewSessionSnapshot = {
   lastScreenshotPath: null,
   lastScreenshotPreview: null,
   fetchIndicators: EMPTY_FETCH_INDICATORS,
+  transcriptMemory: {
+    finalSegmentCount: 0,
+    epochCount: 0,
+    compactedSegmentCount: 0,
+    lastCompactedAt: null,
+  },
 }
 
 const SCROLL_STEP = 220
@@ -278,7 +284,10 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
             </div>
           </div>
 
-          <InterviewContextFooter fetchIndicators={snapshot.fetchIndicators} />
+          <InterviewContextFooter
+            fetchIndicators={snapshot.fetchIndicators}
+            transcriptMemory={snapshot.transcriptMemory}
+          />
         </div>
       </div>
     </div>

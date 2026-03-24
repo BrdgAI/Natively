@@ -2,12 +2,14 @@ import { EventEmitter } from 'events';
 import { InterviewContextDeltaBuilder } from './InterviewContextDeltaBuilder';
 import { isLikelyIncompletePhaseDocument } from './InterviewContentHealth';
 import { InterviewMainDocComposer } from './InterviewMainDocComposer';
+import { InterviewTranscriptMemoryManager } from './InterviewTranscriptMemoryManager';
 import {
   InterviewClarificationItem,
   InterviewCodeSnapshot,
   InterviewFetchIndicator,
   InterviewFetchIndicators,
   InterviewFollowUpState,
+  InterviewLiveTranscriptState,
   InterviewModeConfig,
   InterviewOverlayPayload,
   InterviewPhase,
@@ -19,6 +21,9 @@ import {
   InterviewSavedContext,
   InterviewScreenAnalysis,
   InterviewSessionSnapshot,
+  InterviewTranscriptCompactionPlan,
+  InterviewTranscriptEpoch,
+  InterviewTranscriptMemoryStats,
   InterviewTranscriptSegment,
   RenderableInterviewPhase,
   SessionType,
@@ -30,9 +35,14 @@ const DEFAULT_CONFIG: InterviewModeConfig = {
 
 export class InterviewMemoryLedger extends EventEmitter {
   private transcript: InterviewTranscriptSegment[] = [];
+  private liveTranscript: InterviewLiveTranscriptState = createEmptyLiveTranscriptState();
+  private transcriptEpochs: InterviewTranscriptEpoch[] = [];
+  private transcriptCompactionInFlight = false;
+  private transcriptCompactionQueued = false;
   private pausedInterviewSession = false;
   private readonly contextDeltaBuilder = new InterviewContextDeltaBuilder();
   private readonly documentComposer = new InterviewMainDocComposer();
+  private readonly transcriptMemoryManager = new InterviewTranscriptMemoryManager();
   private phaseRefreshTargets: Record<RenderableInterviewPhase, number | null> = createEmptyPhaseRefreshTargets();
 
   private state: InterviewSessionSnapshot = {
@@ -71,12 +81,17 @@ export class InterviewMemoryLedger extends EventEmitter {
     lastScreenshotPath: null,
     lastScreenshotPreview: null,
     fetchIndicators: createEmptyFetchIndicators(),
+    transcriptMemory: createEmptyTranscriptMemoryStats(),
   };
 
   private config: InterviewModeConfig = DEFAULT_CONFIG;
 
   public startSession(sessionType: SessionType, config?: Partial<InterviewModeConfig>): void {
     this.transcript = [];
+    this.liveTranscript = createEmptyLiveTranscriptState();
+    this.transcriptEpochs = [];
+    this.transcriptCompactionInFlight = false;
+    this.transcriptCompactionQueued = false;
     this.pausedInterviewSession = false;
     this.phaseRefreshTargets = createEmptyPhaseRefreshTargets();
     this.config = { ...DEFAULT_CONFIG, ...(config || {}) };
@@ -121,6 +136,7 @@ export class InterviewMemoryLedger extends EventEmitter {
       lastScreenshotPath: null,
       lastScreenshotPreview: null,
       fetchIndicators: createEmptyFetchIndicators(),
+      transcriptMemory: createEmptyTranscriptMemoryStats(),
     };
     this.emitUpdate();
   }
@@ -166,6 +182,10 @@ export class InterviewMemoryLedger extends EventEmitter {
 
   public endSession(): void {
     this.transcript = [];
+    this.liveTranscript = createEmptyLiveTranscriptState();
+    this.transcriptEpochs = [];
+    this.transcriptCompactionInFlight = false;
+    this.transcriptCompactionQueued = false;
     this.pausedInterviewSession = false;
     this.phaseRefreshTargets = createEmptyPhaseRefreshTargets();
     this.state = {
@@ -199,6 +219,7 @@ export class InterviewMemoryLedger extends EventEmitter {
       lastScreenshotAt: null,
       mainScrollOffset: 0,
       fetchIndicators: createEmptyFetchIndicators(),
+      transcriptMemory: createEmptyTranscriptMemoryStats(),
     };
     this.emitUpdate();
   }
@@ -219,23 +240,128 @@ export class InterviewMemoryLedger extends EventEmitter {
     return [...this.transcript];
   }
 
-  public getRecentTranscript(limit: number = 40): InterviewTranscriptSegment[] {
+  public getRecentFinalTranscript(limit: number = 40): InterviewTranscriptSegment[] {
     return this.transcript.slice(-limit);
   }
 
-  public addTranscript(segment: InterviewTranscriptSegment): void {
-    this.transcript.push(segment);
-    if (this.transcript.length > 500) {
-      this.transcript = this.transcript.slice(-500);
+  public getRecentTranscript(limit: number = 40): InterviewTranscriptSegment[] {
+    return this.getRecentFinalTranscript(limit);
+  }
+
+  public getActiveInterims(): InterviewLiveTranscriptState {
+    return cloneLiveTranscriptState(this.liveTranscript);
+  }
+
+  public getTranscriptEpochs(limit?: number): InterviewTranscriptEpoch[] {
+    const epochs = limit === undefined
+      ? this.transcriptEpochs
+      : this.transcriptEpochs.slice(-limit);
+    return epochs.map(cloneTranscriptEpoch);
+  }
+
+  public getPromptTranscriptEpochs(): InterviewTranscriptEpoch[] {
+    return this.transcriptMemoryManager.getPromptEpochs(this.transcriptEpochs);
+  }
+
+  public getVisionTranscriptEpochs(
+    phase: InterviewPhase,
+    problemStatement: string
+  ): InterviewTranscriptEpoch[] {
+    return this.transcriptMemoryManager.getVisionEpochs(this.transcriptEpochs, phase, problemStatement);
+  }
+
+  public getTranscriptMemoryStats(): InterviewTranscriptMemoryStats {
+    return cloneTranscriptMemoryStats(this.state.transcriptMemory);
+  }
+
+  public beginTranscriptCompaction(): InterviewTranscriptCompactionPlan | null {
+    if (this.transcriptCompactionInFlight) {
+      this.transcriptCompactionQueued = true;
+      return null;
     }
+
+    const plan = this.transcriptMemoryManager.planCompaction(this.transcript, this.transcriptEpochs);
+    if (!plan) {
+      return null;
+    }
+
+    this.transcriptCompactionInFlight = true;
+    this.transcriptCompactionQueued = false;
+    return cloneTranscriptCompactionPlan(plan);
+  }
+
+  public completeTranscriptCompaction(
+    plan: InterviewTranscriptCompactionPlan,
+    summary: {
+      summaryLines: string[];
+      carryForwardFacts: string[];
+      openQuestions: string[];
+      source: 'llm' | 'fallback';
+    },
+    dominantPhases: RenderableInterviewPhase[]
+  ): boolean {
+    this.transcriptCompactionInFlight = false;
+
+    if (!matchesTranscriptCompactionPlan(this.transcript, plan)) {
+      const shouldContinue = this.transcriptCompactionQueued
+        || this.transcriptMemoryManager.needsCompaction(this.transcript, this.transcriptEpochs);
+      this.transcriptCompactionQueued = false;
+      this.refreshTranscriptMemoryStats();
+      return shouldContinue;
+    }
+
+    this.transcript = this.transcript.slice(plan.endIndexExclusive);
+    this.transcriptEpochs = this.transcriptMemoryManager.appendEpoch(this.transcriptEpochs, {
+      id: plan.id,
+      createdAt: Date.now(),
+      fromTimestamp: plan.fromTimestamp,
+      toTimestamp: plan.toTimestamp,
+      compactedSegmentCount: plan.compactedSegments.length,
+      dominantPhases: normalizeDominantPhases(dominantPhases),
+      summaryLines: dedupe(summary.summaryLines).slice(0, 4),
+      carryForwardFacts: dedupe(summary.carryForwardFacts).slice(0, 6),
+      openQuestions: dedupe(summary.openQuestions).slice(0, 4),
+      source: summary.source,
+    });
+
+    const shouldContinue = this.transcriptCompactionQueued
+      || this.transcriptMemoryManager.needsCompaction(this.transcript, this.transcriptEpochs);
+    this.transcriptCompactionQueued = false;
+    this.refreshTranscriptMemoryStats();
+    return shouldContinue;
+  }
+
+  public failTranscriptCompaction(): boolean {
+    this.transcriptCompactionInFlight = false;
+    const shouldContinue = this.transcriptCompactionQueued
+      || this.transcriptMemoryManager.needsCompaction(this.transcript, this.transcriptEpochs);
+    this.transcriptCompactionQueued = false;
+    this.refreshTranscriptMemoryStats();
+    return shouldContinue;
+  }
+
+  public addTranscript(segment: InterviewTranscriptSegment): void {
+    const trimmedText = segment.text.trim();
+    this.liveTranscript = updateLiveTranscriptState(this.liveTranscript, {
+      ...segment,
+      text: trimmedText,
+    });
 
     let nextState: InterviewSessionSnapshot = {
       ...this.state,
       lastTranscriptAt: segment.timestamp,
-      lastTranscriptSnippet: segment.text.trim(),
+      lastTranscriptSnippet: trimmedText || this.state.lastTranscriptSnippet,
     };
 
-    if (segment.final && segment.text.trim()) {
+    if (segment.final && trimmedText) {
+      this.transcript = this.transcriptMemoryManager.trimFinalTranscript([
+        ...this.transcript,
+        {
+          ...segment,
+          text: trimmedText,
+        },
+      ]);
+
       const activePhase = resolveRenderablePhase(nextState);
       const previousDocument = nextState.phaseDocuments[activePhase];
       const normalContext = this.contextDeltaBuilder.buildSavedNormalContext(
@@ -254,6 +380,7 @@ export class InterviewMemoryLedger extends EventEmitter {
           ...nextState.phaseDocuments,
           [activePhase]: nextDocument,
         },
+        transcriptMemory: this.buildTranscriptMemoryStats(),
       });
       this.requestFreshPhaseGeneration(activePhase, nextState.inputRevision + 1, previousDocument);
       this.state = nextState;
@@ -579,6 +706,7 @@ export class InterviewMemoryLedger extends EventEmitter {
         : null,
       latestPayload: this.state.latestPayload ? clonePayload(this.state.latestPayload) : null,
       fetchIndicators: cloneFetchIndicators(this.state.fetchIndicators),
+      transcriptMemory: cloneTranscriptMemoryStats(this.state.transcriptMemory),
     };
   }
 
@@ -637,6 +765,18 @@ export class InterviewMemoryLedger extends EventEmitter {
     this.phaseRefreshTargets[phase] = currentTarget === null
       ? targetRevision
       : Math.max(currentTarget, targetRevision);
+  }
+
+  private buildTranscriptMemoryStats(): InterviewTranscriptMemoryStats {
+    return this.transcriptMemoryManager.buildStats(this.transcript, this.transcriptEpochs);
+  }
+
+  private refreshTranscriptMemoryStats(): void {
+    this.state = {
+      ...this.state,
+      transcriptMemory: this.buildTranscriptMemoryStats(),
+    };
+    this.emitUpdate();
   }
 
   private requestFreshPhaseGeneration(
@@ -809,6 +949,22 @@ function createEmptySavedContext(title: string): InterviewSavedContext {
   };
 }
 
+function createEmptyLiveTranscriptState(): InterviewLiveTranscriptState {
+  return {
+    interviewerInterim: null,
+    userInterim: null,
+  };
+}
+
+function createEmptyTranscriptMemoryStats(): InterviewTranscriptMemoryStats {
+  return {
+    finalSegmentCount: 0,
+    epochCount: 0,
+    compactedSegmentCount: 0,
+    lastCompactedAt: null,
+  };
+}
+
 function createEmptyPhaseHandoff(): InterviewPhaseHandoff {
   return {
     summaryLines: [],
@@ -842,6 +998,63 @@ function cloneFetchIndicators(indicators: InterviewFetchIndicators): InterviewFe
   return {
     next: { ...indicators.next },
     sync: { ...indicators.sync },
+  };
+}
+
+function cloneLiveTranscriptState(state: InterviewLiveTranscriptState): InterviewLiveTranscriptState {
+  return {
+    interviewerInterim: state.interviewerInterim
+      ? { ...state.interviewerInterim }
+      : null,
+    userInterim: state.userInterim
+      ? { ...state.userInterim }
+      : null,
+  };
+}
+
+function cloneTranscriptEpoch(epoch: InterviewTranscriptEpoch): InterviewTranscriptEpoch {
+  return {
+    id: epoch.id,
+    createdAt: epoch.createdAt,
+    fromTimestamp: epoch.fromTimestamp,
+    toTimestamp: epoch.toTimestamp,
+    compactedSegmentCount: epoch.compactedSegmentCount,
+    dominantPhases: [...epoch.dominantPhases],
+    summaryLines: [...epoch.summaryLines],
+    carryForwardFacts: [...epoch.carryForwardFacts],
+    openQuestions: [...epoch.openQuestions],
+    source: epoch.source,
+  };
+}
+
+function cloneTranscriptCompactionPlan(
+  plan: InterviewTranscriptCompactionPlan
+): InterviewTranscriptCompactionPlan {
+  return {
+    id: plan.id,
+    createdAt: plan.createdAt,
+    startIndex: plan.startIndex,
+    endIndexExclusive: plan.endIndexExclusive,
+    compactedSegments: plan.compactedSegments.map((segment) => ({
+      speaker: segment.speaker,
+      text: segment.text,
+      timestamp: segment.timestamp,
+      final: segment.final,
+      confidence: segment.confidence,
+    })),
+    fromTimestamp: plan.fromTimestamp,
+    toTimestamp: plan.toTimestamp,
+  };
+}
+
+function cloneTranscriptMemoryStats(
+  stats: InterviewTranscriptMemoryStats
+): InterviewTranscriptMemoryStats {
+  return {
+    finalSegmentCount: stats.finalSegmentCount,
+    epochCount: stats.epochCount,
+    compactedSegmentCount: stats.compactedSegmentCount,
+    lastCompactedAt: stats.lastCompactedAt,
   };
 }
 
@@ -944,6 +1157,74 @@ function shouldForceFreshGeneration(document: InterviewPhaseDocument): boolean {
 
   const blockCount = document.mainFeed.filter((entry) => entry.type === 'header').length;
   return blockCount <= 1 || isLikelyIncompletePhaseDocument(document);
+}
+
+function matchesTranscriptCompactionPlan(
+  transcript: InterviewTranscriptSegment[],
+  plan: InterviewTranscriptCompactionPlan
+): boolean {
+  if (plan.endIndexExclusive > transcript.length) {
+    return false;
+  }
+
+  for (let index = 0; index < plan.compactedSegments.length; index += 1) {
+    const current = transcript[index];
+    const expected = plan.compactedSegments[index];
+    if (!current || current.speaker !== expected.speaker || current.text !== expected.text || current.timestamp !== expected.timestamp || current.final !== expected.final) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function normalizeDominantPhases(phases: RenderableInterviewPhase[]): RenderableInterviewPhase[] {
+  const ordered: RenderableInterviewPhase[] = phases.length > 0 ? phases : ['p2_clarify'];
+  const seen = new Set<RenderableInterviewPhase>();
+  const result: RenderableInterviewPhase[] = [];
+
+  for (const phase of ordered) {
+    if (seen.has(phase)) {
+      continue;
+    }
+
+    seen.add(phase);
+    result.push(phase);
+  }
+
+  return result;
+}
+
+function updateLiveTranscriptState(
+  current: InterviewLiveTranscriptState,
+  segment: InterviewTranscriptSegment
+): InterviewLiveTranscriptState {
+  const key = resolveLiveTranscriptSpeakerKey(segment.speaker);
+  if (!key) {
+    return current;
+  }
+
+  return {
+    interviewerInterim: key === 'interviewerInterim'
+      ? (segment.final ? null : { ...segment })
+      : current.interviewerInterim,
+    userInterim: key === 'userInterim'
+      ? (segment.final ? null : { ...segment })
+      : current.userInterim,
+  };
+}
+
+function resolveLiveTranscriptSpeakerKey(
+  speaker: string
+): keyof InterviewLiveTranscriptState | null {
+  const normalizedSpeaker = speaker.trim().toLowerCase();
+  if (normalizedSpeaker === 'user') {
+    return 'userInterim';
+  }
+  if (normalizedSpeaker === 'interviewer') {
+    return 'interviewerInterim';
+  }
+  return null;
 }
 
 function savedContextEquals(left: InterviewSavedContext, right: InterviewSavedContext): boolean {

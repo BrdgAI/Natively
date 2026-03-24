@@ -13,6 +13,7 @@ import { InterviewMainDocComposer } from './InterviewMainDocComposer';
 import { InterviewMemoryLedger } from './InterviewMemoryLedger';
 import { InterviewPhaseRouter } from './InterviewPhaseRouter';
 import { InterviewPrefetchBuffer } from './InterviewPrefetchBuffer';
+import { InterviewTranscriptEpochSummarizer } from './InterviewTranscriptEpochSummarizer';
 import { InterviewVisionSync } from './InterviewVisionSync';
 import { Phase2ClarificationGenerator } from './generators/Phase2ClarificationGenerator';
 import { Phase3ApproachGenerator } from './generators/Phase3ApproachGenerator';
@@ -31,6 +32,7 @@ import {
   InterviewRoutingMode,
   InterviewScreenAnalysis,
   InterviewSessionSnapshot,
+  InterviewTranscriptCompactionPlan,
   InterviewTranscriptSegment,
   RenderableInterviewPhase,
   SessionType,
@@ -51,6 +53,7 @@ export class InterviewOrchestrator extends EventEmitter {
   private readonly diffEngine = new InterviewDiffEngine();
   private readonly clarifyPlanner = new InterviewClarifyPlanner();
   private readonly documentComposer = new InterviewMainDocComposer();
+  private readonly transcriptEpochSummarizer: InterviewTranscriptEpochSummarizer;
   private readonly generators: GeneratorMap;
 
   private prefetchTimer: NodeJS.Timeout | null = null;
@@ -60,6 +63,7 @@ export class InterviewOrchestrator extends EventEmitter {
   constructor(private readonly llmHelper: LLMHelper, private readonly appState: AppState) {
     super();
     this.visionSync = new InterviewVisionSync(llmHelper);
+    this.transcriptEpochSummarizer = new InterviewTranscriptEpochSummarizer(llmHelper);
     this.generators = {
       p2_clarify: new Phase2ClarificationGenerator(llmHelper),
       p3_approach: new Phase3ApproachGenerator(llmHelper),
@@ -133,6 +137,9 @@ export class InterviewOrchestrator extends EventEmitter {
     }
 
     this.ledger.addTranscript(segment);
+    if (segment.final && segment.text.trim()) {
+      this.scheduleTranscriptCompaction();
+    }
 
     if (!segment.final) {
       return;
@@ -208,7 +215,13 @@ export class InterviewOrchestrator extends EventEmitter {
     try {
       const screenshotPath = await this.appState.takeScreenshot(false);
       const preview = await this.appState.getImagePreview(screenshotPath);
-      const analysis = await this.visionSync.analyze(snapshot.phase, screenshotPath, preview, this.ledger.getRecentTranscript());
+      const analysis = await this.visionSync.analyze(
+        snapshot.phase,
+        screenshotPath,
+        preview,
+        this.ledger.getRecentTranscript(),
+        this.ledger.getVisionTranscriptEpochs(snapshot.phase, snapshot.problemStatement)
+      );
       this.lastScreenAnalysis = analysis;
 
       const screenUpdated = this.ledger.applyScreenAnalysis(analysis);
@@ -311,11 +324,43 @@ export class InterviewOrchestrator extends EventEmitter {
     }
   }
 
+  private scheduleTranscriptCompaction(): void {
+    const plan = this.ledger.beginTranscriptCompaction();
+    if (!plan) {
+      return;
+    }
+
+    void this.runTranscriptCompaction(plan);
+  }
+
+  private async runTranscriptCompaction(plan: InterviewTranscriptCompactionPlan): Promise<void> {
+    try {
+      const summary = await this.transcriptEpochSummarizer.summarize({
+        snapshot: this.ledger.getSnapshot(),
+        segments: plan.compactedSegments,
+      });
+      const shouldContinue = this.ledger.completeTranscriptCompaction(
+        plan,
+        summary,
+        buildDominantEpochPhases(this.ledger.getSnapshot())
+      );
+      if (shouldContinue) {
+        this.scheduleTranscriptCompaction();
+      }
+    } catch {
+      const shouldContinue = this.ledger.failTranscriptCompaction();
+      if (shouldContinue) {
+        this.scheduleTranscriptCompaction();
+      }
+    }
+  }
+
   private async generatePayload(phase: RenderableInterviewPhase): Promise<InterviewOverlayPayload> {
     const snapshot = this.ledger.getSnapshot();
     const context: InterviewGeneratorContext = {
       snapshot,
       recentTranscript: this.ledger.getRecentTranscript(),
+      earlierMemory: this.ledger.getPromptTranscriptEpochs(),
       screenAnalysis: this.lastScreenAnalysis,
       previousPayload: snapshot.latestPayload,
     };
@@ -494,6 +539,28 @@ function compactFacts(snapshot: InterviewSessionSnapshot): string[] {
     ...snapshot.requirementChanges,
   ].filter(Boolean);
   return dedupe(facts).slice(0, 6);
+}
+
+function buildDominantEpochPhases(snapshot: InterviewSessionSnapshot): RenderableInterviewPhase[] {
+  const activePhase = normalizePhase(snapshot.manualOverridePhase || snapshot.phase);
+  const result: RenderableInterviewPhase[] = [activePhase];
+
+  for (const phase of ['p2_clarify', 'p3_approach', 'p4_code', 'p5_test', 'p6_follow_up'] as const) {
+    if (phase === activePhase) {
+      continue;
+    }
+
+    const handoff = snapshot.phaseHandoffs[phase];
+    if (handoff.updatedAt || handoff.summaryLines.length > 0 || handoff.confirmedSpecLines.length > 0) {
+      result.push(phase);
+    }
+
+    if (result.length >= 3) {
+      break;
+    }
+  }
+
+  return result;
 }
 
 function dedupe(items: string[]): string[] {

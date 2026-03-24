@@ -163,6 +163,13 @@ export interface InterviewCodeSnapshot {
   source: 'vision' | 'generator' | 'diff'
 }
 
+export interface InterviewTranscriptMemoryStats {
+  finalSegmentCount: number
+  epochCount: number
+  compactedSegmentCount: number
+  lastCompactedAt: number | null
+}
+
 export interface InterviewSessionSnapshot {
   active: boolean
   sessionType: SessionType
@@ -199,4 +206,5 @@ export interface InterviewSessionSnapshot {
   lastScreenshotPath: string | null
   lastScreenshotPreview: string | null
   fetchIndicators: InterviewFetchIndicators
+  transcriptMemory: InterviewTranscriptMemoryStats
 }

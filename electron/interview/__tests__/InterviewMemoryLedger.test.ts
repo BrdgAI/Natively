@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createLongInterviewTranscript } from '../__fixtures__/longInterview';
 import { InterviewMemoryLedger } from '../InterviewMemoryLedger';
 import { InterviewMainDocComposer } from '../InterviewMainDocComposer';
 import { InterviewOverlayPayload } from '../types';
@@ -139,4 +140,94 @@ test('diff payloads keep the full code snapshot available for the primary code p
   assert.equal(after.phaseDocuments.p6_follow_up.primaryCode?.content, 'def two_sum(nums, target):\n    return []');
   assert.equal(after.phaseDocuments.p6_follow_up.secondaryCode?.kind, 'diff');
   assert.equal(after.phaseDocuments.p6_follow_up.secondaryCode?.content, diffText);
+});
+
+test('interim transcript stays in live memory until a final segment arrives', () => {
+  const ledger = new InterviewMemoryLedger();
+  ledger.startSession('interview', { codingLanguage: 'python' });
+
+  ledger.addTranscript({
+    speaker: 'interviewer',
+    text: 'Can you walk',
+    timestamp: 1700000000000,
+    final: false,
+  });
+
+  assert.equal(ledger.getTranscript().length, 0);
+  assert.equal(ledger.getRecentTranscript().length, 0);
+  assert.equal(ledger.getActiveInterims().interviewerInterim?.text, 'Can you walk');
+  assert.equal(ledger.getActiveInterims().userInterim, null);
+
+  ledger.addTranscript({
+    speaker: 'interviewer',
+    text: 'Can you walk through the time complexity?',
+    timestamp: 1700000000500,
+    final: true,
+  });
+
+  assert.equal(ledger.getTranscript().length, 1);
+  assert.equal(ledger.getRecentFinalTranscript().length, 1);
+  assert.equal(
+    ledger.getTranscript()[0]?.text,
+    'Can you walk through the time complexity?'
+  );
+  assert.equal(ledger.getActiveInterims().interviewerInterim, null);
+});
+
+test('latest interim per speaker is tracked independently without consuming durable transcript budget', () => {
+  const ledger = new InterviewMemoryLedger();
+  ledger.startSession('interview', { codingLanguage: 'python' });
+
+  ledger.addTranscript({
+    speaker: 'interviewer',
+    text: 'What if',
+    timestamp: 1700000000000,
+    final: false,
+  });
+  ledger.addTranscript({
+    speaker: 'user',
+    text: 'I would',
+    timestamp: 1700000000100,
+    final: false,
+  });
+  ledger.addTranscript({
+    speaker: 'interviewer',
+    text: 'What if duplicates appear?',
+    timestamp: 1700000000200,
+    final: false,
+  });
+
+  const interims = ledger.getActiveInterims();
+  assert.equal(interims.interviewerInterim?.text, 'What if duplicates appear?');
+  assert.equal(interims.userInterim?.text, 'I would');
+  assert.equal(ledger.getTranscript().length, 0);
+});
+
+test('epoch compaction stores summarized earlier memory without clearing recent finals', () => {
+  const ledger = new InterviewMemoryLedger();
+  ledger.startSession('interview', { codingLanguage: 'python' });
+
+  for (const segment of createLongInterviewTranscript(1000)) {
+    ledger.addTranscript(segment);
+  }
+
+  const plan = ledger.beginTranscriptCompaction();
+  assert.ok(plan);
+
+  const shouldContinue = ledger.completeTranscriptCompaction(
+    plan as NonNullable<typeof plan>,
+    {
+      summaryLines: ['Clarified the return contract early.'],
+      carryForwardFacts: ['Return indices, not values.'],
+      openQuestions: ['Whether duplicates are allowed.'],
+      source: 'fallback',
+    },
+    ['p2_clarify', 'p3_approach']
+  );
+
+  assert.equal(shouldContinue, true);
+  assert.equal(ledger.getTranscript().length, 700);
+  assert.equal(ledger.getTranscriptEpochs().length, 1);
+  assert.equal(ledger.getTranscriptMemoryStats().epochCount, 1);
+  assert.equal(ledger.getTranscriptMemoryStats().compactedSegmentCount, 300);
 });

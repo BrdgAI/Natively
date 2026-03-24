@@ -1,6 +1,15 @@
 import { LLMHelper } from '../LLMHelper';
-import { buildVisionPrompt, INTERVIEW_VISION_SYSTEM_PROMPT } from './InterviewPrompts';
-import { InterviewPhase, InterviewScreenAnalysis, InterviewTranscriptSegment } from './types';
+import {
+  buildVisionPrompt,
+  formatVisionEarlierMemory,
+  INTERVIEW_VISION_SYSTEM_PROMPT,
+} from './InterviewPrompts';
+import {
+  InterviewPhase,
+  InterviewScreenAnalysis,
+  InterviewTranscriptEpoch,
+  InterviewTranscriptSegment,
+} from './types';
 
 type JsonObject = Record<string, unknown>;
 
@@ -11,14 +20,16 @@ export class InterviewVisionSync {
     phase: InterviewPhase,
     screenshotPath: string,
     screenshotPreview: string | undefined,
-    recentTranscript: InterviewTranscriptSegment[]
+    recentTranscript: InterviewTranscriptSegment[],
+    earlierMemory: InterviewTranscriptEpoch[]
   ): Promise<InterviewScreenAnalysis> {
     const prompt = buildVisionPrompt(
       phase,
       recentTranscript
         .slice(-10)
         .map((item) => `[${item.speaker.toUpperCase()}] ${item.text}`)
-        .join('\n')
+        .join('\n'),
+      formatVisionEarlierMemory(earlierMemory)
     );
 
     const raw = await this.llmHelper.chat(prompt, [screenshotPath], undefined, INTERVIEW_VISION_SYSTEM_PROMPT);

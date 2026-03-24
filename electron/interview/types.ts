@@ -162,6 +162,53 @@ export interface InterviewTranscriptSegment {
   confidence?: number;
 }
 
+export interface InterviewLiveTranscriptState {
+  interviewerInterim: InterviewTranscriptSegment | null;
+  userInterim: InterviewTranscriptSegment | null;
+}
+
+export interface InterviewTranscriptEpoch {
+  id: string;
+  createdAt: number;
+  fromTimestamp: number;
+  toTimestamp: number;
+  compactedSegmentCount: number;
+  dominantPhases: RenderableInterviewPhase[];
+  summaryLines: string[];
+  carryForwardFacts: string[];
+  openQuestions: string[];
+  source: 'llm' | 'fallback';
+}
+
+export interface InterviewTranscriptCompactionPlan {
+  id: string;
+  createdAt: number;
+  startIndex: number;
+  endIndexExclusive: number;
+  compactedSegments: InterviewTranscriptSegment[];
+  fromTimestamp: number;
+  toTimestamp: number;
+}
+
+export interface InterviewEpochSummaryResult {
+  summaryLines: string[];
+  carryForwardFacts: string[];
+  openQuestions: string[];
+  source: 'llm' | 'fallback';
+}
+
+export interface InterviewTranscriptEpochSummaryInput {
+  snapshot: InterviewSessionSnapshot;
+  segments: InterviewTranscriptSegment[];
+}
+
+export interface InterviewTranscriptMemoryStats {
+  finalSegmentCount: number;
+  epochCount: number;
+  compactedSegmentCount: number;
+  lastCompactedAt: number | null;
+}
+
 export interface InterviewCodeSnapshot {
   content: string;
   narration: string[];
@@ -229,11 +276,13 @@ export interface InterviewSessionSnapshot {
   lastScreenshotPath: string | null;
   lastScreenshotPreview: string | null;
   fetchIndicators: InterviewFetchIndicators;
+  transcriptMemory: InterviewTranscriptMemoryStats;
 }
 
 export interface InterviewGeneratorContext {
   snapshot: InterviewSessionSnapshot;
   recentTranscript: InterviewTranscriptSegment[];
+  earlierMemory: InterviewTranscriptEpoch[];
   screenAnalysis?: InterviewScreenAnalysis | null;
   previousPayload?: InterviewOverlayPayload | null;
 }

@@ -54,7 +54,11 @@ export function buildPhasePrompt(phase: InterviewPhase, context: InterviewGenera
     .join('\n\n');
 }
 
-export function buildVisionPrompt(phase: InterviewPhase, transcriptContext: string): string {
+export function buildVisionPrompt(
+  phase: InterviewPhase,
+  transcriptContext: string,
+  earlierMemoryContext?: string
+): string {
   const instructions = loadVisionInstructions(phase);
 
   return [
@@ -63,6 +67,10 @@ export function buildVisionPrompt(phase: InterviewPhase, transcriptContext: stri
     buildVisionSchema(normalizePhase(phase)),
     `Transcript context:
 ${transcriptContext || '[none]'}`,
+    earlierMemoryContext
+      ? `Earlier interview memory:
+${earlierMemoryContext}`
+      : '',
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -111,6 +119,9 @@ ${formatScreenAnalysis(context.screenAnalysis)}
 
 Latest normal context delta:
 ${formatNormalContext(context.recentTranscript)}
+
+Earlier interview memory:
+${formatEarlierMemory(context.earlierMemory)}
 
 Relevant phase handoffs:
 ${formatRelevantPhaseHandoffs(snapshot, phase)}
@@ -226,6 +237,28 @@ function formatNormalContext(recentTranscript: InterviewGeneratorContext['recent
     .join('\n');
 }
 
+function formatEarlierMemory(earlierMemory: InterviewGeneratorContext['earlierMemory']): string {
+  if (earlierMemory.length === 0) {
+    return '- none';
+  }
+
+  return earlierMemory
+    .map((epoch) => {
+      const parts = [`phase: ${epoch.dominantPhases.map((phase) => formatPhaseLabel(phase)).join('/')}`];
+      if (epoch.summaryLines.length > 0) {
+        parts.push(`summary: ${epoch.summaryLines.join(' | ')}`);
+      }
+      if (epoch.carryForwardFacts.length > 0) {
+        parts.push(`facts: ${epoch.carryForwardFacts.join(' | ')}`);
+      }
+      if (epoch.openQuestions.length > 0) {
+        parts.push(`open: ${epoch.openQuestions.join(' | ')}`);
+      }
+      return `- ${parts.join(' | ')}`;
+    })
+    .join('\n');
+}
+
 function formatRelevantPhaseHandoffs(
   snapshot: InterviewSessionSnapshot,
   phase: RenderableInterviewPhase
@@ -282,6 +315,27 @@ function formatTranscript(context: InterviewGeneratorContext): string {
   }
 
   return transcript.map((item) => `[${item.speaker.toUpperCase()}] ${item.text}`).join('\n');
+}
+
+export function formatVisionEarlierMemory(
+  earlierMemory: InterviewGeneratorContext['earlierMemory']
+): string {
+  if (earlierMemory.length === 0) {
+    return '';
+  }
+
+  return earlierMemory
+    .map((epoch) => {
+      const parts = [...epoch.summaryLines];
+      if (epoch.carryForwardFacts.length > 0) {
+        parts.push(`facts: ${epoch.carryForwardFacts.join(' | ')}`);
+      }
+      if (epoch.openQuestions.length > 0) {
+        parts.push(`open: ${epoch.openQuestions.join(' | ')}`);
+      }
+      return `- ${parts.join(' | ')}`;
+    })
+    .join('\n');
 }
 
 function normalizePhase(phase: InterviewPhase): RenderableInterviewPhase {

@@ -139,6 +139,7 @@ test('manual routing keeps transcript and sync from auto-switching phases while 
   const approachPrompt = buildPhasePrompt('p3_approach', {
     snapshot: orchestrator.getState(),
     recentTranscript: [],
+    earlierMemory: [],
     previousPayload: orchestrator.getState().latestPayload,
   });
 

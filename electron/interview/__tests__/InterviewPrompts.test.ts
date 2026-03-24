@@ -13,6 +13,7 @@ test('clarify phase prompt includes the ordered clarify categories and the slim 
   const prompt = buildPhasePrompt('p2_clarify', {
     snapshot: ledger.getSnapshot(),
     recentTranscript: [],
+    earlierMemory: [],
     previousPayload: null,
   });
 
@@ -76,10 +77,52 @@ test('approach prompt receives confirmed clarify handoff context', () => {
   const prompt = buildPhasePrompt('p3_approach', {
     snapshot: ledger.getSnapshot(),
     recentTranscript: [],
+    earlierMemory: [],
     previousPayload: clarifyPayload,
   });
 
   assert.ok(prompt.includes('Clarify handoff'));
   assert.ok(prompt.includes('Output: return indices, not values.'));
   assert.ok(prompt.includes('Should I assume the input is unsorted?'));
+});
+
+test('coding prompt includes earlier interview memory ahead of recent transcript', () => {
+  const ledger = new InterviewMemoryLedger();
+  ledger.startSession('interview', { codingLanguage: 'python' });
+  ledger.setProblemStatement('Two Sum', ['Exactly one answer exists']);
+
+  const prompt = buildPhasePrompt('p4_code', {
+    snapshot: ledger.getSnapshot(),
+    recentTranscript: [
+      {
+        speaker: 'interviewer',
+        text: 'Please start coding.',
+        timestamp: 1700000000000,
+        final: true,
+      },
+    ],
+    earlierMemory: [
+      {
+        id: 'epoch-1',
+        createdAt: 1700000000500,
+        fromTimestamp: 1700000000000,
+        toTimestamp: 1700000000400,
+        compactedSegmentCount: 300,
+        dominantPhases: ['p2_clarify', 'p3_approach'],
+        summaryLines: ['Candidate confirmed a hash map approach.'],
+        carryForwardFacts: ['Return indices, not values.'],
+        openQuestions: ['Whether duplicates are allowed.'],
+        source: 'llm',
+      },
+    ],
+    previousPayload: null,
+  });
+
+  const earlierMemoryIndex = prompt.indexOf('Earlier interview memory:');
+  const recentTranscriptIndex = prompt.indexOf('Recent transcript:');
+
+  assert.ok(earlierMemoryIndex >= 0);
+  assert.ok(recentTranscriptIndex > earlierMemoryIndex);
+  assert.ok(prompt.includes('Candidate confirmed a hash map approach.'));
+  assert.ok(prompt.includes('Return indices, not values.'));
 });
