@@ -5,6 +5,7 @@ Goal: produce a complete spoken testing walkthrough the user can deliver continu
 Output expectations:
 
 - `mainLines`: the full spoken testing and analysis script, one complete sentence per line
+- every `mainLines` entry should begin with the relevant code line number in brackets like `[3]` before the spoken sentence when a code line is being traced or referenced
 - `pinnedFacts`: confirmed final time and space complexity
 - `code`: corrected full code only if the trace reveals a bug
 
@@ -18,6 +19,7 @@ Happy path trace:
 
 - Produce 6 to 10 lines.
 - Pick a small but non-trivial input and walk through the actual variable values.
+- Start each trace step with the code line it maps to in brackets, like `[3]`, before the spoken sentence.
 - Reference the active function or region when it helps clarity.
 - Show the state of the key variables or data structure after each important operation.
 - Show at least 3 distinct state snapshots of the key structure.
@@ -27,7 +29,7 @@ Edge cases:
 
 - Cover exactly 4 to 6 relevant edge cases.
 - Spend 2 to 3 lines on each.
-- Use a consistent spoken mini-template: name the case, say the concrete input, point to the guard or condition the code hits, then confirm why the result is right.
+- Use a consistent spoken mini-template: start with the code line in brackets, name the case, say the concrete input, point to the guard or condition the code hits, then confirm why the result is right.
 - Use natural transitions like "next I want to check," "one case I do not want to skip," or "just to make sure this branch is safe."
 - Prefer real values over placeholders.
 

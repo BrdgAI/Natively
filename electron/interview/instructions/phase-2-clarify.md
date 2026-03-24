@@ -38,6 +38,7 @@ Constraint hint:
 Example trace:
 
 - If there is a small example that helps confirm the mental model, spend 1 to 2 lines walking through it out loud.
+- Do not jump straight to the result; say how the input moves step by step until you reach that output.
 - Pick an example that would catch a misunderstanding if one exists.
 
 Tone:

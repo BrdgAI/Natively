@@ -120,7 +120,7 @@ Active follow-up:
 ${formatFollowUp(snapshot)}
 
 Current code:
-${snapshot.currentCode?.content || '[no code snapshot yet]'}
+${formatCurrentCode(snapshot.currentCode?.content || '', phase)}
 
 Latest screen context delta:
 ${formatScreenAnalysis(context.screenAnalysis)}
@@ -214,6 +214,21 @@ function formatList(items: string[]): string {
   }
 
   return items.map((item) => `- ${item}`).join('\n');
+}
+
+function formatCurrentCode(code: string, phase: RenderableInterviewPhase): string {
+  if (!code.trim()) {
+    return '[no code snapshot yet]';
+  }
+
+  if (phase !== 'p5_test') {
+    return code;
+  }
+
+  return code
+    .split('\n')
+    .map((line, index) => `${index + 1}: ${line}`)
+    .join('\n');
 }
 
 function formatClarificationItems(

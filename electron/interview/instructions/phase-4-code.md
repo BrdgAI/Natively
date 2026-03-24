@@ -16,6 +16,7 @@ Code structure:
 - Return the full code in one output.
 - Put edge-case guards at the top, then the main logic, then helpers after the main function unless the problem clearly needs another layout.
 - Use short section comments when they help the user stay oriented in the doc.
+- Number those structure comments in the order the user should write the sections or functions.
 - Do not force a docstring unless it genuinely helps this problem.
 - Fill the whole solution in the same output.
 
@@ -38,6 +39,7 @@ Comments inside code:
 
 - Keep comments short and useful.
 - Use comments for why a choice was made, why a nearby alternative was not used, or what pitfall is being avoided.
+- Let the structure comments double as a write-order guide, such as `# 1. edge-case guards`, `# 2. main scan`, or `# 3. helper for ...`.
 - Do not waste comments on lines that are already obvious from the code itself.
 
 Helpers and naming:

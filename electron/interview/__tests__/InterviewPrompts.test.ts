@@ -56,6 +56,7 @@ test('clarify phase prompt includes the v2-style clarification guidance and the 
   assert.ok(prompt.includes('Ask exactly 3 to 5 questions.'));
   assert.ok(prompt.includes('If the context already contains confirmed answers or hard constraints, end with 3 to 5 short plain comment lines'));
   assert.ok(prompt.includes('Use natural transitions such as "one more thing I want to nail down," "and related to that," or "just to be safe."'));
+  assert.ok(prompt.includes('Do not jump straight to the result; say how the input moves step by step until you reach that output.'));
   assert.ok(prompt.includes('Problem statement:'));
   assert.ok(prompt.includes('Two Sum from the prompt'));
   assert.ok(prompt.includes('Visible constraints:'));
@@ -90,6 +91,7 @@ test('approach prompt carries the longer brainstorming-style walkthrough instruc
   assert.ok(prompt.includes('6 to 8 minutes'));
   assert.ok(prompt.includes('Walk through the standard toolkit in one spoken sweep'));
   assert.ok(prompt.includes('Spend 2 to 3 lines on each remaining candidate.'));
+  assert.ok(prompt.includes('If the total has multiple factors like O(n log n) or O((V+E) log V), say exactly where each factor comes from.'));
   assert.ok(prompt.includes('Sound like someone crossing options off out loud while thinking'));
 });
 
@@ -108,14 +110,41 @@ test('coding prompt now asks for code-line-first narration and why-comments inst
   assert.ok(prompt.includes('each `mainLines` entry should start with the exact code line or a tiny code snippet being typed'));
   assert.ok(prompt.includes('Example shape: `seen_by_value = {} because I want O(1) lookups while I scan once through the array.`'));
   assert.ok(prompt.includes('Use comments for why a choice was made'));
+  assert.ok(prompt.includes('Number those structure comments in the order the user should write the sections or functions.'));
+  assert.ok(prompt.includes('`# 1. edge-case guards`'));
   assert.equal(prompt.includes('production PR'), false);
   assert.equal(prompt.includes('Do not force a docstring unless it genuinely helps this problem.'), true);
 });
 
 test('testing prompt includes the hybrid spoken structure for trace and edge cases', () => {
   const ledger = new InterviewMemoryLedger();
+  const composer = new InterviewMainDocComposer();
   ledger.startSession('interview', { codingLanguage: 'python' });
   ledger.setProblemStatement('Two Sum', ['Exactly one answer exists']);
+  const snapshot = ledger.getSnapshot();
+  const codingPayload: InterviewOverlayPayload = {
+    phase: 'p4_code',
+    phaseConfidence: 0.9,
+    manualOverrideActive: false,
+    mainLines: [],
+    pinnedFacts: [],
+    clarificationQuestions: [],
+    freshness: {
+      transcriptUpdatedMsAgo: 0,
+      screenshotUpdatedMsAgo: null,
+      generatedMsAgo: 0,
+    },
+    generatedAt: Date.now(),
+    inputRevision: snapshot.inputRevision,
+    code: {
+      language: 'python',
+      content: ['def solve(nums, target):', '    seen = {}', '    return []'].join('\n'),
+    },
+  };
+  const phaseDocument = composer.compose(snapshot, codingPayload, {
+    savedContexts: snapshot.phaseDocuments.p4_code.savedContexts,
+  });
+  ledger.applyGeneratedPayload(codingPayload, phaseDocument);
 
   const prompt = buildPhasePrompt('p5_test', {
     snapshot: ledger.getSnapshot(),
@@ -127,6 +156,10 @@ test('testing prompt includes the hybrid spoken structure for trace and edge cas
   assert.ok(prompt.includes('Produce 6 to 10 lines.'));
   assert.ok(prompt.includes('Use a consistent spoken mini-template'));
   assert.ok(prompt.includes('Use natural transitions like "next I want to check," "one case I do not want to skip," or "just to make sure this branch is safe."'));
+  assert.ok(prompt.includes('every `mainLines` entry should begin with the relevant code line number in brackets like `[3]`'));
+  assert.ok(prompt.includes('Start each trace step with the code line it maps to in brackets, like `[3]`, before the spoken sentence.'));
+  assert.ok(prompt.includes('1: def solve(nums, target):'));
+  assert.ok(prompt.includes('2:     seen = {}'));
   assert.ok(prompt.includes('Sound like someone carefully reading back through their own code'));
 });
 

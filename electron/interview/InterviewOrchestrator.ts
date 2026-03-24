@@ -542,9 +542,9 @@ function fallbackMainLines(phase: RenderableInterviewPhase, snapshot: InterviewS
       ];
     case 'p5_test':
       return [
-        'Let me walk one real example first so I can make sure the state changes the way I expect.',
-        'After that I want to check the edge cases that usually break this kind of solution.',
-        'Once that looks good, I will restate the time and space costs and call out one tradeoff we could explore next.',
+        '[1] Let me walk one real example first so I can make sure the state changes the way I expect.',
+        '[2] After that I want to check the edge cases that usually break this kind of solution.',
+        '[3] Once that looks good, I will restate the time and space costs and call out one tradeoff we could explore next.',
       ];
     case 'p6_follow_up':
       return [

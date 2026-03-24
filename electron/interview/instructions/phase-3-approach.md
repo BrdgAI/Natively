@@ -34,6 +34,7 @@ Complexity chain:
 
 - Produce at least 3 lines that break the chosen approach down by step.
 - Name each major step, its cost, and then the total time.
+- If the total has multiple factors like O(n log n) or O((V+E) log V), say exactly where each factor comes from.
 - Name the major space contributors and the total space.
 - If a concrete bound is known, do a rough numerical sanity check out loud.
 
