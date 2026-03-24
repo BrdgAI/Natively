@@ -3,7 +3,7 @@
  * Configuration for STT providers (Google gRPC, REST, WebSocket)
  */
 
-export type SttProviderId = 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson';
+export type SttProviderId = 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox';
 
 export interface SttProviderConfig {
     id: SttProviderId;
@@ -113,9 +113,20 @@ export const STT_PROVIDERS: Record<SttProviderId, SttProviderConfig> = {
         }),
         responseContentPath: 'results[0].alternatives[0].transcript',
     },
+    soniox: {
+        id: 'soniox',
+        name: 'Soniox Real-time',
+        description: 'Real-time multilingual transcription via Soniox WebSocket',
+        endpoint: 'wss://stt-rt.soniox.com/transcribe-websocket',
+        model: 'stt-rt-v4',
+        uploadType: 'websocket',
+        authHeader: (apiKey: string) => ({
+            Authorization: `Bearer ${apiKey}`,
+        }),
+        responseContentPath: 'tokens',
+    },
 };
 
 export const STT_PROVIDER_OPTIONS = Object.values(STT_PROVIDERS);
 
 export const DEFAULT_STT_PROVIDER: SttProviderId = 'google';
-

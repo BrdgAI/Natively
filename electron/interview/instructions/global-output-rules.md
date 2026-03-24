@@ -15,11 +15,12 @@ Rules:
 - When changing code, prefer diff-style updates over rewriting everything.
 - Do not repeat facts that are already firmly known unless they help the user stay oriented.
 - Ask only missing, high-value clarification questions.
-- If there is no meaningful update, preserve the current structure and say so clearly in the update summary.
+- If there is no meaningful update, return an empty `mainLines` array.
 
 Formatting goals:
 
-- The main lane should carry the primary script.
-- The fixed anchor should contain the short orientation block.
-- Quick answers should hold interruption-ready responses.
-- Pinned facts should stay short and stable.
+- Put the primary spoken script into `mainLines`.
+- Every `mainLines` entry must be one complete sentence on its own line.
+- Do not add numbering, headers, dividers, or markdown.
+- Use `pinnedFacts` only for short stable carry-forward facts.
+- Return `code` only when code is actually needed.

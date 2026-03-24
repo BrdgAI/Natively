@@ -1,4 +1,6 @@
 import { EventEmitter } from 'events';
+import { InterviewContextDeltaBuilder } from './InterviewContextDeltaBuilder';
+import { InterviewMainDocComposer } from './InterviewMainDocComposer';
 import {
   InterviewClarificationItem,
   InterviewCodeSnapshot,
@@ -6,11 +8,12 @@ import {
   InterviewModeConfig,
   InterviewOverlayPayload,
   InterviewPhase,
-  InterviewPhaseHandoff,
-  InterviewPhaseHandoffMap,
   InterviewPhaseDocument,
   InterviewPhaseDocumentMap,
+  InterviewPhaseHandoff,
+  InterviewPhaseHandoffMap,
   InterviewRoutingMode,
+  InterviewSavedContext,
   InterviewScreenAnalysis,
   InterviewSessionSnapshot,
   InterviewTranscriptSegment,
@@ -25,6 +28,8 @@ const DEFAULT_CONFIG: InterviewModeConfig = {
 export class InterviewMemoryLedger extends EventEmitter {
   private transcript: InterviewTranscriptSegment[] = [];
   private pausedInterviewSession = false;
+  private readonly contextDeltaBuilder = new InterviewContextDeltaBuilder();
+  private readonly documentComposer = new InterviewMainDocComposer();
 
   private state: InterviewSessionSnapshot = {
     active: false,
@@ -49,8 +54,6 @@ export class InterviewMemoryLedger extends EventEmitter {
     examples: [],
     approachSummary: [],
     pinnedFacts: [],
-    thoughtNotes: [],
-    quickQuestions: [],
     requirementChanges: [],
     activeFollowUp: null,
     phaseHandoffs: createEmptyPhaseHandoffs(),
@@ -99,8 +102,6 @@ export class InterviewMemoryLedger extends EventEmitter {
       examples: [],
       approachSummary: [],
       pinnedFacts: [],
-      thoughtNotes: [],
-      quickQuestions: [],
       requirementChanges: [],
       activeFollowUp: null,
       phaseHandoffs,
@@ -181,8 +182,6 @@ export class InterviewMemoryLedger extends EventEmitter {
       examples: [],
       approachSummary: [],
       pinnedFacts: [],
-      thoughtNotes: [],
-      quickQuestions: [],
       requirementChanges: [],
       activeFollowUp: null,
       phaseHandoffs: createEmptyPhaseHandoffs(),
@@ -221,17 +220,39 @@ export class InterviewMemoryLedger extends EventEmitter {
       this.transcript = this.transcript.slice(-300);
     }
 
-    this.state = {
+    let nextState: InterviewSessionSnapshot = {
       ...this.state,
       lastTranscriptAt: segment.timestamp,
       lastTranscriptSnippet: segment.text.trim(),
     };
 
     if (segment.final && segment.text.trim()) {
+      const activePhase = resolveRenderablePhase(nextState);
+      const previousDocument = nextState.phaseDocuments[activePhase];
+      const normalContext = this.contextDeltaBuilder.buildSavedNormalContext(
+        previousDocument.savedContexts.normal,
+        nextState,
+        this.getRecentTranscript()
+      );
+      const nextDocument = this.documentComposer.withSavedNormalContext(
+        previousDocument,
+        normalContext,
+        'Updated: Normal Context'
+      );
+      nextState = withMainScrollOffset({
+        ...nextState,
+        phaseDocuments: {
+          ...nextState.phaseDocuments,
+          [activePhase]: nextDocument,
+        },
+      });
+      this.state = nextState;
       this.bumpRevision();
-    } else {
-      this.emitUpdate();
+      return;
     }
+
+    this.state = nextState;
+    this.emitUpdate();
   }
 
   public setSessionType(sessionType: SessionType): void {
@@ -372,34 +393,15 @@ export class InterviewMemoryLedger extends EventEmitter {
 
     const activePhase = resolveRenderablePhase(this.state);
     const previousDocument = this.state.phaseDocuments[activePhase];
-    const nextExtractedText = {
-      problemText: analysis.problemStatement || previousDocument.extractedText.problemText,
-      requirementDelta: analysis.hints && analysis.hints.length > 0
-        ? dedupe([...previousDocument.extractedText.requirementDelta, ...analysis.hints])
-        : previousDocument.extractedText.requirementDelta,
-      dryRunInput: analysis.dryRunInput || previousDocument.extractedText.dryRunInput,
-      codeObservations: dedupe([
-        ...previousDocument.extractedText.codeObservations,
-        ...(analysis.likelyMistakes || []),
-        ...(analysis.extractedTests || []),
-      ]).slice(-8),
-      capturedAt: analysis.capturedAt,
-    };
-
-    const phaseDocuments = {
-      ...this.state.phaseDocuments,
-      [activePhase]: {
-        ...previousDocument,
-        extractedText: nextExtractedText,
-        updateSummary: {
-          status: 'updated',
-          updatedSections: ['Extracted Text'],
-          message: 'Updated: Extracted Text',
-          at: Date.now(),
-        },
-        lastUpdatedAt: Date.now(),
-      },
-    };
+    const screenContext = this.contextDeltaBuilder.buildSavedScreenContext(
+      previousDocument.savedContexts.screen,
+      analysis
+    );
+    const nextDocument = this.documentComposer.withSavedScreenContext(
+      previousDocument,
+      screenContext,
+      'Updated: Screen Context'
+    );
 
     this.state = withMainScrollOffset({
       ...this.state,
@@ -420,14 +422,22 @@ export class InterviewMemoryLedger extends EventEmitter {
         ...this.state.clarifiedFacts,
         ...(analysis.givenConstraints || []),
       ]).slice(0, 10),
-      thoughtNotes: analysis.likelyMistakes && analysis.likelyMistakes.length > 0
-        ? dedupe([...this.state.thoughtNotes, ...analysis.likelyMistakes]).slice(-8)
-        : this.state.thoughtNotes,
-      quickQuestions: analysis.extractedTests && analysis.extractedTests.length > 0
-        ? dedupe([...this.state.quickQuestions, ...analysis.extractedTests]).slice(-8)
-        : this.state.quickQuestions,
       activeFollowUp: buildFollowUpFromAnalysis(analysis, this.state.activeFollowUp),
-      phaseDocuments,
+      phaseDocuments: {
+        ...this.state.phaseDocuments,
+        [activePhase]: {
+          ...nextDocument,
+          primaryCode: nextCode
+            ? {
+                language: 'python',
+                kind: 'full',
+                title: 'Current code',
+                content: nextCode.content,
+                notes: [...nextCode.suspectedMistakes],
+              }
+            : nextDocument.primaryCode,
+        },
+      },
       currentCode: nextCode,
       lastScreenshotAt: analysis.capturedAt,
       lastScreenshotPath: analysis.screenshotPath,
@@ -442,23 +452,15 @@ export class InterviewMemoryLedger extends EventEmitter {
     clarificationItems?: InterviewClarificationItem[],
     phaseHandoff?: InterviewPhaseHandoff
   ): void {
-    const nextCode: InterviewCodeSnapshot | null = payload.codePanel
-      ? payload.codePanel.mode === 'diff' && this.state.currentCode
-        ? {
-            ...this.state.currentCode,
-            capturedAt: payload.generatedAt,
-            suspectedMistakes: payload.codePanel.suspectedMistakes.length > 0
-              ? payload.codePanel.suspectedMistakes
-              : this.state.currentCode.suspectedMistakes,
-          }
-        : {
-            content: payload.codePanel.content,
-            narration: payload.codePanel.narration,
-            mode: payload.codePanel.mode,
-            capturedAt: payload.generatedAt,
-            suspectedMistakes: payload.codePanel.suspectedMistakes,
-            source: payload.codePanel.mode === 'diff' ? 'diff' : 'generator',
-          }
+    const nextCode: InterviewCodeSnapshot | null = payload.code
+      ? {
+          content: payload.code.content,
+          narration: [],
+          mode: 'full',
+          capturedAt: payload.generatedAt,
+          suspectedMistakes: [],
+          source: 'generator',
+        }
       : this.state.currentCode;
 
     const phaseDocuments = {
@@ -475,6 +477,7 @@ export class InterviewMemoryLedger extends EventEmitter {
     const nextClarificationItems = clarificationItems
       ? clarificationItems.map(cloneClarificationItem)
       : this.state.clarificationItems;
+    const diffShown = Boolean(phaseDocument.secondaryCode);
 
     this.state = withMainScrollOffset({
       ...this.state,
@@ -487,17 +490,10 @@ export class InterviewMemoryLedger extends EventEmitter {
       clarificationItems: nextClarificationItems,
       pinnedFacts: dedupe(payload.pinnedFacts).slice(0, 10),
       approachSummary: payload.phase === 'p3_approach'
-        ? dedupe(payload.speakNow.slice(0, 6))
+        ? dedupe(payload.mainLines).slice(0, 10)
         : this.state.approachSummary,
-      thoughtNotes: dedupe(payload.thoughtNotes).slice(0, 10),
-      quickQuestions: dedupe(payload.quickQuestions).slice(0, 10),
       activeFollowUp: payload.phase === 'p6_follow_up'
-        ? {
-            request: payload.speakNow[0] || this.state.activeFollowUp?.request || '',
-            impactedArea: payload.codePanel?.mode === 'diff' ? 'Code diff' : this.state.activeFollowUp?.impactedArea || 'Current solution',
-            diffRequired: payload.codePanel?.mode === 'diff',
-            derivedFrom: this.state.activeFollowUp?.derivedFrom || 'transcript',
-          }
+        ? buildFollowUpFromPayload(payload, this.state.activeFollowUp, diffShown)
         : this.state.activeFollowUp,
       phaseHandoffs,
       currentCode: nextCode,
@@ -553,15 +549,19 @@ export class InterviewMemoryLedger extends EventEmitter {
       examples: [...this.state.examples],
       approachSummary: [...this.state.approachSummary],
       pinnedFacts: [...this.state.pinnedFacts],
-      thoughtNotes: [...this.state.thoughtNotes],
-      quickQuestions: [...this.state.quickQuestions],
       requirementChanges: [...this.state.requirementChanges],
       activeFollowUp: this.state.activeFollowUp ? { ...this.state.activeFollowUp } : null,
       phaseHandoffs: clonePhaseHandoffs(this.state.phaseHandoffs),
       phaseDocuments: clonePhaseDocuments(this.state.phaseDocuments),
       controlStripVisibleUntil: this.state.controlStripVisibleUntil,
       controlStripHint: this.state.controlStripHint,
-      currentCode: this.state.currentCode ? { ...this.state.currentCode, narration: [...this.state.currentCode.narration], suspectedMistakes: [...this.state.currentCode.suspectedMistakes] } : null,
+      currentCode: this.state.currentCode
+        ? {
+            ...this.state.currentCode,
+            narration: [...this.state.currentCode.narration],
+            suspectedMistakes: [...this.state.currentCode.suspectedMistakes],
+          }
+        : null,
       latestPayload: this.state.latestPayload ? clonePayload(this.state.latestPayload) : null,
     };
   }
@@ -592,6 +592,24 @@ function buildFollowUpFromAnalysis(
     impactedArea: analysis.currentCode ? 'Visible code' : current?.impactedArea || 'Current solution',
     diffRequired: Boolean(analysis.currentCode),
     derivedFrom: 'screen',
+  };
+}
+
+function buildFollowUpFromPayload(
+  payload: InterviewOverlayPayload,
+  current: InterviewFollowUpState | null,
+  diffShown: boolean
+): InterviewFollowUpState | null {
+  const request = payload.mainLines[0] || current?.request || '';
+  if (!request) {
+    return current;
+  }
+
+  return {
+    request,
+    impactedArea: diffShown ? 'Code diff' : current?.impactedArea || 'Current solution',
+    diffRequired: diffShown,
+    derivedFrom: current?.derivedFrom || 'transcript',
   };
 }
 
@@ -635,23 +653,14 @@ function createEmptyPhaseHandoffs(): InterviewPhaseHandoffMap {
 function createEmptyPhaseDocument(phase: RenderableInterviewPhase): InterviewPhaseDocument {
   return {
     phase,
-    anchor: {
-      title: formatPhase(phase),
-      items: [],
-      writeNow: [],
-      note: null,
+    mainFeed: [],
+    primaryCode: null,
+    secondaryCode: null,
+    savedContexts: {
+      screen: createEmptySavedContext('Last screen context saved'),
+      normal: createEmptySavedContext('Last normal context saved'),
     },
-    mainSections: [],
-    quickAnswers: [],
-    codePanel: null,
-    extractedText: {
-      problemText: '',
-      requirementDelta: [],
-      dryRunInput: '',
-      codeObservations: [],
-      capturedAt: null,
-    },
-    updateSummary: {
+    status: {
       status: 'partial',
       updatedSections: [],
       message: 'Waiting for first update',
@@ -659,6 +668,14 @@ function createEmptyPhaseDocument(phase: RenderableInterviewPhase): InterviewPha
     },
     scrollOffset: 0,
     lastUpdatedAt: null,
+  };
+}
+
+function createEmptySavedContext(title: string): InterviewSavedContext {
+  return {
+    title,
+    lines: [],
+    updatedAt: null,
   };
 }
 
@@ -694,40 +711,50 @@ function clonePhaseHandoffs(handoffs: InterviewPhaseHandoffMap): InterviewPhaseH
 function clonePhaseDocument(document: InterviewPhaseDocument): InterviewPhaseDocument {
   return {
     phase: document.phase,
-    anchor: {
-      title: document.anchor.title,
-      items: [...document.anchor.items],
-      writeNow: [...document.anchor.writeNow],
-      note: document.anchor.note,
-    },
-    mainSections: document.mainSections.map((section) => ({
-      id: section.id,
-      title: section.title,
-      lines: [...section.lines],
-      tone: section.tone,
+    mainFeed: document.mainFeed.map((entry) => ({
+      id: entry.id,
+      blockId: entry.blockId,
+      type: entry.type,
+      blockLabel: entry.blockLabel,
+      text: entry.text,
+      state: entry.state,
+      clarificationId: entry.clarificationId,
     })),
-    quickAnswers: document.quickAnswers.map((item) => ({ ...item })),
-    codePanel: document.codePanel
+    primaryCode: document.primaryCode
       ? {
-          language: document.codePanel.language,
-          mode: document.codePanel.mode,
-          content: document.codePanel.content,
-          narration: [...document.codePanel.narration],
-          suspectedMistakes: [...document.codePanel.suspectedMistakes],
+          language: document.primaryCode.language,
+          kind: document.primaryCode.kind,
+          title: document.primaryCode.title,
+          content: document.primaryCode.content,
+          notes: [...document.primaryCode.notes],
         }
       : null,
-    extractedText: {
-      problemText: document.extractedText.problemText,
-      requirementDelta: [...document.extractedText.requirementDelta],
-      dryRunInput: document.extractedText.dryRunInput,
-      codeObservations: [...document.extractedText.codeObservations],
-      capturedAt: document.extractedText.capturedAt,
+    secondaryCode: document.secondaryCode
+      ? {
+          language: document.secondaryCode.language,
+          kind: document.secondaryCode.kind,
+          title: document.secondaryCode.title,
+          content: document.secondaryCode.content,
+          notes: [...document.secondaryCode.notes],
+        }
+      : null,
+    savedContexts: {
+      screen: {
+        title: document.savedContexts.screen.title,
+        lines: [...document.savedContexts.screen.lines],
+        updatedAt: document.savedContexts.screen.updatedAt,
+      },
+      normal: {
+        title: document.savedContexts.normal.title,
+        lines: [...document.savedContexts.normal.lines],
+        updatedAt: document.savedContexts.normal.updatedAt,
+      },
     },
-    updateSummary: {
-      status: document.updateSummary.status,
-      updatedSections: [...document.updateSummary.updatedSections],
-      message: document.updateSummary.message,
-      at: document.updateSummary.at,
+    status: {
+      status: document.status.status,
+      updatedSections: [...document.status.updatedSections],
+      message: document.status.message,
+      at: document.status.at,
     },
     scrollOffset: document.scrollOffset,
     lastUpdatedAt: document.lastUpdatedAt,
@@ -758,65 +785,18 @@ function clonePhaseHandoff(handoff: InterviewPhaseHandoff): InterviewPhaseHandof
 function clonePayload(payload: InterviewOverlayPayload): InterviewOverlayPayload {
   return {
     ...payload,
-    speakNow: [...payload.speakNow],
-    speakIfAsked: [...payload.speakIfAsked],
-    writeNow: [...payload.writeNow],
-    thoughtNotes: [...payload.thoughtNotes],
-    quickQuestions: [...payload.quickQuestions],
+    mainLines: [...payload.mainLines],
     pinnedFacts: [...payload.pinnedFacts],
-    changes: payload.changes.map((item) => ({ ...item })),
-    anchor: payload.anchor
-      ? {
-          title: payload.anchor.title,
-          items: [...payload.anchor.items],
-          writeNow: [...payload.anchor.writeNow],
-          note: payload.anchor.note,
-        }
-      : undefined,
-    mainSections: payload.mainSections
-      ? payload.mainSections.map((section) => ({
-          id: section.id,
-          title: section.title,
-          lines: [...section.lines],
-          tone: section.tone,
-        }))
-      : undefined,
     clarificationQuestions: payload.clarificationQuestions
       ? payload.clarificationQuestions.map((item) => ({ ...item }))
       : undefined,
-    updateSummary: payload.updateSummary
+    code: payload.code
       ? {
-          status: payload.updateSummary.status,
-          updatedSections: [...payload.updateSummary.updatedSections],
-          message: payload.updateSummary.message,
-          at: payload.updateSummary.at,
-        }
-      : undefined,
-    codePanel: payload.codePanel
-      ? {
-          language: payload.codePanel.language,
-          mode: payload.codePanel.mode,
-          content: payload.codePanel.content,
-          narration: [...payload.codePanel.narration],
-          suspectedMistakes: [...payload.codePanel.suspectedMistakes],
+          language: payload.code.language,
+          content: payload.code.content,
         }
       : undefined,
   };
-}
-
-function formatPhase(phase: RenderableInterviewPhase): string {
-  switch (phase) {
-    case 'p2_clarify':
-      return 'Clarify';
-    case 'p3_approach':
-      return 'Approach';
-    case 'p4_code':
-      return 'Code';
-    case 'p5_test':
-      return 'Test';
-    case 'p6_follow_up':
-      return 'Follow-up';
-  }
 }
 
 function dedupe(items: string[]): string[] {

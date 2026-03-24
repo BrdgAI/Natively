@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import type { AppState } from '../main';
 import { LLMHelper } from '../LLMHelper';
 import { InterviewClarifyPlanner } from './InterviewClarifyPlanner';
-import { InterviewDiffEngine, InterviewDiffResult } from './InterviewDiffEngine';
+import { InterviewDiffEngine } from './InterviewDiffEngine';
 import { InterviewMainDocComposer } from './InterviewMainDocComposer';
 import { InterviewMemoryLedger } from './InterviewMemoryLedger';
 import { InterviewPhaseRouter } from './InterviewPhaseRouter';
@@ -50,8 +50,6 @@ export class InterviewOrchestrator extends EventEmitter {
   private prefetchTimer: NodeJS.Timeout | null = null;
   private prefetchInFlight = false;
   private lastScreenAnalysis: InterviewScreenAnalysis | null = null;
-  private lastDiffResult: InterviewDiffResult | null = null;
-  private lastAdvanceCount = 0;
 
   constructor(private readonly llmHelper: LLMHelper, private readonly appState: AppState) {
     super();
@@ -72,8 +70,6 @@ export class InterviewOrchestrator extends EventEmitter {
   public startSession(sessionType: SessionType, config?: Partial<InterviewModeConfig>): void {
     this.buffer.invalidateAll();
     this.lastScreenAnalysis = null;
-    this.lastDiffResult = null;
-    this.lastAdvanceCount = 0;
     this.ledger.startSession(sessionType, config);
     if (sessionType === 'interview') {
       this.schedulePrefetch('start');
@@ -84,8 +80,6 @@ export class InterviewOrchestrator extends EventEmitter {
     this.cancelPrefetch();
     this.buffer.invalidateAll();
     this.lastScreenAnalysis = null;
-    this.lastDiffResult = null;
-    this.lastAdvanceCount = 0;
     this.ledger.endSession();
   }
 
@@ -158,11 +152,7 @@ export class InterviewOrchestrator extends EventEmitter {
       snapshot.latestPayload.inputRevision === snapshot.inputRevision &&
       snapshot.latestPayload.phase === currentPhase
     ) {
-      if (currentPhase === 'p2_clarify') {
-        this.publishNoUpdate(snapshot.latestPayload);
-      } else {
-        this.advancePublishedPayload();
-      }
+      this.publishNoUpdate(snapshot.latestPayload);
       return this.ledger.getSnapshot();
     }
 
@@ -195,12 +185,6 @@ export class InterviewOrchestrator extends EventEmitter {
       const preview = await this.appState.getImagePreview(screenshotPath);
       const analysis = await this.visionSync.analyze(snapshot.phase, screenshotPath, preview, this.ledger.getRecentTranscript());
       this.lastScreenAnalysis = analysis;
-
-      const previousCode = snapshot.currentCode?.content || '';
-      const nextCode = analysis.currentCode || '';
-      if (previousCode && nextCode && previousCode !== nextCode) {
-        this.lastDiffResult = this.diffEngine.diffText(previousCode, nextCode);
-      }
 
       this.ledger.applyScreenAnalysis(analysis);
       this.refreshPhase();
@@ -311,48 +295,18 @@ export class InterviewOrchestrator extends EventEmitter {
 
     const payload = await this.generators[phase].generate(context);
 
-    if (this.lastDiffResult && payload.codePanel && (phase === 'p4_code' || phase === 'p6_follow_up')) {
-      payload.codePanel.mode = 'diff';
-      payload.codePanel.content = this.lastDiffResult.diffText || payload.codePanel.content;
-      payload.changes = [
-        ...payload.changes,
-        ...this.lastDiffResult.summary.map((detail) => ({
-          label: 'Code change',
-          detail,
-          severity: 'updated' as const,
-        })),
-      ];
-      payload.updateSummary = {
-        status: 'updated',
-        updatedSections: ['Main', 'Code'],
-        message: 'Updated: Main, Code',
-        at: payload.generatedAt,
-      };
-    }
-
-    if (payload.speakNow.length === 0) {
-      payload.speakNow = fallbackSpeakNow(phase, snapshot);
+    if (payload.mainLines.length === 0) {
+      payload.mainLines = fallbackMainLines(phase, snapshot);
     }
 
     if (payload.pinnedFacts.length === 0) {
       payload.pinnedFacts = compactFacts(snapshot);
     }
 
-    if (!payload.updateSummary) {
-      payload.updateSummary = {
-        status: 'updated',
-        updatedSections: payload.codePanel?.content ? ['Main', 'Code'] : ['Main'],
-        message: payload.codePanel?.content ? 'Updated: Main, Code' : 'Updated: Main',
-        at: payload.generatedAt,
-      };
-    }
-
     return payload;
   }
 
   private publishBufferedPayload(entry: InterviewBufferEntry): void {
-    this.lastAdvanceCount = 0;
-
     const snapshot = this.ledger.getSnapshot();
     const clarificationItems = entry.phase === 'p2_clarify'
       ? this.clarifyPlanner.plan(
@@ -370,54 +324,29 @@ export class InterviewOrchestrator extends EventEmitter {
             .map((item) => item.text),
         }
       : snapshot;
-    const phaseDocument = this.documentComposer.compose(composedSnapshot, entry.payload);
+    const previousDocument = composedSnapshot.phaseDocuments[entry.phase];
+    const diffText = this.buildDiffText(composedSnapshot, entry.payload);
+    const phaseDocument = this.documentComposer.compose(composedSnapshot, entry.payload, {
+      clarificationItems,
+      savedContexts: previousDocument.savedContexts,
+      diffText,
+    });
     const phaseHandoff = buildPhaseHandoff(composedSnapshot, entry.payload, phaseDocument, clarificationItems);
 
     this.ledger.applyGeneratedPayload(entry.payload, phaseDocument, clarificationItems, phaseHandoff);
   }
 
-  private advancePublishedPayload(): void {
-    const snapshot = this.ledger.getSnapshot();
-    const payload = snapshot.latestPayload;
-    if (!payload) {
-      return;
+  private buildDiffText(snapshot: InterviewSessionSnapshot, payload: InterviewOverlayPayload): string | null {
+    if (!payload.code?.content || !snapshot.currentCode?.content) {
+      return null;
     }
 
-    const nextAdvanceCount = this.lastAdvanceCount + 1;
-    const promoted = payload.speakIfAsked.slice(0, nextAdvanceCount);
-    if (promoted.length === 0) {
-      this.publishNoUpdate(payload);
-      return;
+    if (normalizeContent(payload.code.content) === normalizeContent(snapshot.currentCode.content)) {
+      return null;
     }
 
-    this.lastAdvanceCount = promoted.length;
-    const derived: InterviewOverlayPayload = {
-      ...payload,
-      speakNow: dedupe([...payload.speakNow, ...promoted]),
-      changes: [
-        ...payload.changes,
-        {
-          label: 'Expanded script',
-          detail: `Added ${promoted.length} backup line${promoted.length === 1 ? '' : 's'} to the main script.`,
-          severity: 'updated',
-        },
-      ],
-      updateSummary: {
-        status: 'updated',
-        updatedSections: ['Main'],
-        message: 'Updated: Main',
-        at: Date.now(),
-      },
-      generatedAt: Date.now(),
-      freshness: {
-        ...payload.freshness,
-        generatedMsAgo: 0,
-      },
-    };
-
-    const phaseDocument = this.documentComposer.compose(snapshot, derived);
-    const phaseHandoff = buildPhaseHandoff(snapshot, derived, phaseDocument);
-    this.ledger.applyGeneratedPayload(derived, phaseDocument, undefined, phaseHandoff);
+    const diffResult = this.diffEngine.diffText(snapshot.currentCode.content, payload.code.content);
+    return diffResult.diffText || null;
   }
 
   private publishNoUpdate(payload: InterviewOverlayPayload): void {
@@ -428,12 +357,6 @@ export class InterviewOrchestrator extends EventEmitter {
     );
     const derived: InterviewOverlayPayload = {
       ...payload,
-      updateSummary: {
-        status: 'unchanged',
-        updatedSections: [],
-        message: 'No updates',
-        at: Date.now(),
-      },
       generatedAt: Date.now(),
       freshness: {
         ...payload.freshness,
@@ -450,14 +373,7 @@ function normalizePhase(phase: InterviewPhase): RenderableInterviewPhase {
 }
 
 function buildClarificationCandidates(payload: InterviewOverlayPayload): InterviewClarificationCandidate[] {
-  if (payload.clarificationQuestions && payload.clarificationQuestions.length > 0) {
-    return payload.clarificationQuestions;
-  }
-
-  return payload.quickQuestions.map((text) => ({
-    text,
-    why: '',
-  }));
+  return payload.clarificationQuestions || [];
 }
 
 function buildPhaseHandoff(
@@ -467,25 +383,19 @@ function buildPhaseHandoff(
   clarificationItems?: InterviewClarificationItem[]
 ): InterviewPhaseHandoff {
   const clarifyHandoff = snapshot.phaseHandoffs.p2_clarify;
-  const writeSpecSection = phaseDocument.mainSections.find((section) => section.id === 'write-spec');
-  const summaryLines = dedupe([
-    ...payload.speakNow,
-    ...phaseDocument.mainSections
-      .filter((section) => section.id !== 'backup-lines')
-      .flatMap((section) => section.lines.slice(0, 2)),
-  ]).slice(0, 8);
+  const summaryLines = dedupe(payload.mainLines).slice(0, 8);
+  const specLines = extractSpecLines(payload.mainLines);
   const confirmedSpecLines = payload.phase === 'p2_clarify'
     ? dedupe([
-        ...phaseDocument.anchor.writeNow,
-        ...(writeSpecSection?.lines || []),
+        ...specLines,
         ...snapshot.constraints,
         ...snapshot.clarifiedFacts,
         ...payload.pinnedFacts,
       ]).slice(0, 10)
     : dedupe([
         ...clarifyHandoff.confirmedSpecLines,
+        ...specLines,
         ...payload.pinnedFacts,
-        ...phaseDocument.anchor.writeNow,
       ]).slice(0, 10);
   const openQuestions = payload.phase === 'p2_clarify'
     ? dedupe(
@@ -499,37 +409,45 @@ function buildPhaseHandoff(
       ]).slice(0, 10);
 
   return {
-    summaryLines,
+    summaryLines: summaryLines.length > 0 ? summaryLines : phaseDocument.mainFeed
+      .filter((entry) => entry.type === 'line' && entry.text)
+      .slice(-6)
+      .map((entry) => entry.text as string),
     confirmedSpecLines,
     openQuestions,
     updatedAt: payload.generatedAt,
   };
 }
 
-function fallbackSpeakNow(phase: RenderableInterviewPhase, snapshot: InterviewSessionSnapshot): string[] {
+function extractSpecLines(lines: string[]): string[] {
+  return lines.filter((line) => /(input|output|constraint|return|edge|example|complexity|time|space|approach|write)/i.test(line));
+}
+
+function fallbackMainLines(phase: RenderableInterviewPhase, snapshot: InterviewSessionSnapshot): string[] {
   switch (phase) {
     case 'p2_clarify':
       return [
-        'Let me restate the problem to make sure I have it right.',
-        snapshot.problemStatement || 'I want to confirm the exact input, output, and constraints before I start.',
+        snapshot.problemStatement
+          ? `Let me restate the problem first to make sure I have it right: ${snapshot.problemStatement}`
+          : 'Let me restate the problem first so I can confirm the input, output, and constraints before coding.',
+        'I want to ask a few quick clarification questions before I choose an approach.',
       ];
     case 'p3_approach':
       return [
         'I will start with the brute-force idea and then move to the optimized approach.',
-        'Before I code, I want to confirm the tradeoff and the target complexity.',
+        'I want to confirm the final time and space complexity before I code.',
       ];
     case 'p4_code':
       return [
-        'I am going to write the top-down structure first and then fill in the helpers.',
-        'I will keep the code aligned with the approach we just agreed on.',
+        'I am going to write the structure first and then fill in the core logic.',
       ];
     case 'p5_test':
       return [
-        'Let me dry run this with a concrete example and then cover edge cases and complexity.',
+        'Let me dry run the code with one concrete example and then cover edge cases.',
       ];
     case 'p6_follow_up':
       return [
-        'I can make that change, and then I will quickly summarize the impact.',
+        'I can make that follow-up change and then summarize the impact clearly.',
       ];
   }
 }
@@ -561,19 +479,20 @@ function dedupe(items: string[]): string[] {
   return result;
 }
 
+function normalizeContent(value: string): string {
+  return value.trim().replace(/\r\n/g, '\n');
+}
+
+function buildControlStripHint(snapshot: InterviewSessionSnapshot): string {
+  const phase = normalizePhase(snapshot.manualOverridePhase || snapshot.phase);
+  return `Current phase: ${formatPhaseLabel(phase)}`;
+}
+
 function isControlStripVisible(snapshot: InterviewSessionSnapshot): boolean {
   return Boolean(snapshot.controlStripVisibleUntil && snapshot.controlStripVisibleUntil > Date.now());
 }
 
-function buildControlStripHint(snapshot: InterviewSessionSnapshot): string {
-  const activePhase = snapshot.manualOverridePhase || snapshot.phase;
-  if (snapshot.routingMode === 'auto') {
-    return `Sync again to cycle phase. Current target: ${formatPhase(activePhase)}.`;
-  }
-  return `Manual phase target: ${formatPhase(activePhase)}. Use Prev or Next to switch phases.`;
-}
-
-function formatPhase(phase: InterviewPhase): string {
+function formatPhaseLabel(phase: RenderableInterviewPhase): string {
   switch (phase) {
     case 'p2_clarify':
       return 'Clarify';
@@ -585,14 +504,12 @@ function formatPhase(phase: InterviewPhase): string {
       return 'Test';
     case 'p6_follow_up':
       return 'Follow-up';
-    default:
-      return 'Clarify';
   }
 }
 
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
+function toErrorMessage(error: Error | string | number | boolean | null | undefined): string {
+  if (error instanceof Error) {
     return error.message;
   }
-  return 'unknown error';
+  return String(error);
 }

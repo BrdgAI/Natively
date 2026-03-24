@@ -80,7 +80,7 @@ export interface ElectronAPI {
   setGroqApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   setOpenaiApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   setClaudeApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
-  getStoredCredentials: () => Promise<{ hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; googleServiceAccountPath: string | null; sttProvider: 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox'; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; groqSttModel?: string; hasSonioxKey?: boolean; hasTavilyKey?: boolean; geminiPreferredModel?: string; groqPreferredModel?: string; openaiPreferredModel?: string; claudePreferredModel?: string }>
+  getStoredCredentials: () => Promise<{ hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; googleServiceAccountPath: string | null; sttProvider: 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox'; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; groqSttModel?: string; hasSonioxKey?: boolean; sonioxSttModel?: string; hasTavilyKey?: boolean; geminiPreferredModel?: string; groqPreferredModel?: string; openaiPreferredModel?: string; claudePreferredModel?: string }>
 
   // STT Provider Management
   setSttProvider: (provider: 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox') => Promise<{ success: boolean; error?: string }>
@@ -94,7 +94,9 @@ export interface ElectronAPI {
   setIbmWatsonApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   setGroqSttModel: (model: string) => Promise<{ success: boolean; error?: string }>
   setSonioxApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
-  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string) => Promise<{ success: boolean; error?: string }>
+  setSonioxSttModel: (model: string) => Promise<{ success: boolean; error?: string }>
+  fetchSonioxSttModels: (apiKey?: string) => Promise<{ success: boolean; models?: {id: string, label: string}[]; error?: string }>
+  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string, model?: string) => Promise<{ success: boolean; error?: string }>
 
   // Native Audio Service Events
   onNativeAudioTranscript: (callback: (transcript: { speaker: string; text: string; final: boolean }) => void) => () => void

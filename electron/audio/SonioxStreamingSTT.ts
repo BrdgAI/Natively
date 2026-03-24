@@ -19,6 +19,7 @@
 import { EventEmitter } from 'events';
 import WebSocket from 'ws';
 import { RECOGNITION_LANGUAGES } from '../config/languages';
+import { SONIOX_DEFAULT_REALTIME_MODEL } from '../utils/sonioxModelFetcher';
 
 const SONIOX_WEBSOCKET_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
 const RECONNECT_BASE_DELAY_MS = 1000;
@@ -27,6 +28,7 @@ const KEEPALIVE_INTERVAL_MS = 15000;
 
 export class SonioxStreamingSTT extends EventEmitter {
     private apiKey: string;
+    private model: string;
     private ws: WebSocket | null = null;
     private isActive = false;
     private shouldReconnect = false;
@@ -45,9 +47,10 @@ export class SonioxStreamingSTT extends EventEmitter {
     private buffer: Buffer[] = [];
     private isConnecting = false;
 
-    constructor(apiKey: string) {
+    constructor(apiKey: string, model: string = SONIOX_DEFAULT_REALTIME_MODEL) {
         super();
         this.apiKey = apiKey;
+        this.model = model;
     }
 
     // =========================================================================
@@ -180,12 +183,12 @@ export class SonioxStreamingSTT extends EventEmitter {
         this.ws.on('open', () => {
             this.isActive = true;
             this.reconnectAttempts = 0;
-            console.log('[SonioxStreaming] Connected, sending config...');
+            console.log(`[SonioxStreaming] Connected, sending config for model ${this.model}...`);
 
             // Send initial configuration as first message
             const config: any = {
                 api_key: this.apiKey,
-                model: 'stt-rt-v4',
+                model: this.model,
                 audio_format: 'pcm_s16le',
                 sample_rate: this.sampleRate,
                 num_channels: this.numChannels,

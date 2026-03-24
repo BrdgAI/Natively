@@ -10,41 +10,20 @@ import {
 
 const OUTPUT_SCHEMA = `Return JSON only with this exact shape:
 {
-  "speakNow": ["short natural line"],
-  "speakIfAsked": ["backup line"],
-  "writeNow": ["what to type"],
-  "thoughtNotes": ["silent thinking note"],
-  "quickQuestions": ["fast answer or interruption line"],
-  "pinnedFacts": ["fact that should stay visible"],
-  "anchor": {
-    "title": "short anchor title",
-    "items": ["short orientation item"],
-    "writeNow": ["small persistent write item"],
-    "note": "optional short note"
-  },
-  "mainSections": [
-    {
-      "id": "stable-section-id",
-      "title": "section title",
-      "lines": ["line to show in the main lane"],
-      "tone": "primary"
-    }
-  ],
+  "mainLines": ["one complete sentence per line"],
+  "pinnedFacts": ["short stable fact"],
   "clarificationQuestions": [
     {
       "text": "question to ask",
       "why": "why this matters"
     }
   ],
-  "codePanel": {
+  "code": {
     "language": "python",
-    "mode": "full",
-    "content": "full code or diff text",
-    "narration": ["what to say while typing"],
-    "suspectedMistakes": ["bug note"]
+    "content": "full code only when code is needed"
   }
 }
-Use empty arrays when a section has no content. Use null for codePanel only when no code is needed.`;
+Use empty arrays when a section has no content. Use null for code when no code is needed. Do not add numbering, headers, or separators inside mainLines.`;
 
 export const INTERVIEW_GENERATOR_SYSTEM_PROMPT = `You are writing interview overlay guidance for a live software engineering candidate.
 The user may read directly from the screen.
@@ -63,14 +42,13 @@ export function buildPhasePrompt(phase: InterviewPhase, context: InterviewGenera
   const instructions = loadGeneratorInstructions(phase);
   const snapshot = context.snapshot;
   const normalizedPhase = normalizePhase(phase);
-  const activeDocument = snapshot.phaseDocuments[normalizedPhase];
 
   return [
     instructions.index,
     instructions.global,
     instructions.phase,
     `Current phase: ${normalizedPhase}.`,
-    buildRuntimeContext(snapshot, context, activeDocument ? normalizedPhase : null),
+    buildRuntimeContext(snapshot, context, normalizedPhase),
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -93,11 +71,8 @@ ${transcriptContext || '[none]'}`,
 function buildRuntimeContext(
   snapshot: InterviewSessionSnapshot,
   context: InterviewGeneratorContext,
-  phase: RenderableInterviewPhase | null
+  phase: RenderableInterviewPhase
 ): string {
-  const phaseDocument = phase ? snapshot.phaseDocuments[phase] : null;
-  const screenAnalysis = context.screenAnalysis;
-
   return `Routing mode:
 ${snapshot.routingMode}
 
@@ -125,26 +100,20 @@ ${formatList(snapshot.requirementChanges)}
 Pinned facts:
 ${formatList(snapshot.pinnedFacts)}
 
-Thought notes:
-${formatList(snapshot.thoughtNotes)}
-
-Quick answers already visible:
-${formatList(snapshot.quickQuestions)}
+Active follow-up:
+${formatFollowUp(snapshot)}
 
 Current code:
 ${snapshot.currentCode?.content || '[no code snapshot yet]'}
 
-Current phase anchor:
-${phaseDocument ? formatAnchor(phaseDocument.anchor) : '[no phase anchor yet]'}
+Latest screen context delta:
+${formatScreenAnalysis(context.screenAnalysis)}
 
-Current phase main sections:
-${phaseDocument ? formatMainSections(phaseDocument.mainSections) : '- none'}
+Latest normal context delta:
+${formatNormalContext(context.recentTranscript)}
 
 Relevant phase handoffs:
-${phase ? formatRelevantPhaseHandoffs(snapshot, phase) : '- none'}
-
-Latest screen analysis:
-${formatScreenAnalysis(screenAnalysis)}
+${formatRelevantPhaseHandoffs(snapshot, phase)}
 
 Recent transcript:
 ${formatTranscript(context)}`;
@@ -199,6 +168,7 @@ function formatList(items: string[]): string {
   if (items.length === 0) {
     return '- none';
   }
+
   return items.map((item) => `- ${item}`).join('\n');
 }
 
@@ -206,30 +176,22 @@ function formatClarificationItems(items: InterviewClarificationItem[]): string {
   if (items.length === 0) {
     return '- none';
   }
+
   return items
     .map((item) => `- [${item.status}] ${item.text}${item.why ? ` | why: ${item.why}` : ''}${item.answer ? ` | answer: ${item.answer}` : ''}`)
     .join('\n');
 }
 
-function formatAnchor(anchor: InterviewSessionSnapshot['phaseDocuments'][RenderableInterviewPhase]['anchor']): string {
-  const lines = [
-    anchor.title,
-    ...anchor.items,
-    ...anchor.writeNow.map((item) => `write: ${item}`),
-  ];
-  if (anchor.note) {
-    lines.push(`note: ${anchor.note}`);
-  }
-  return lines.length > 0 ? lines.map((line) => `- ${line}`).join('\n') : '- none';
-}
-
-function formatMainSections(sections: InterviewSessionSnapshot['phaseDocuments'][RenderableInterviewPhase]['mainSections']): string {
-  if (sections.length === 0) {
+function formatFollowUp(snapshot: InterviewSessionSnapshot): string {
+  if (!snapshot.activeFollowUp) {
     return '- none';
   }
-  return sections
-    .map((section) => [`- ${section.title} (${section.tone})`, ...section.lines.map((line) => `  - ${line}`)].join('\n'))
-    .join('\n');
+
+  return [
+    `- request: ${snapshot.activeFollowUp.request}`,
+    `- impacted area: ${snapshot.activeFollowUp.impactedArea}`,
+    `- diff required: ${snapshot.activeFollowUp.diffRequired ? 'yes' : 'no'}`,
+  ].join('\n');
 }
 
 function formatScreenAnalysis(screenAnalysis: InterviewGeneratorContext['screenAnalysis']): string {
@@ -248,6 +210,20 @@ function formatScreenAnalysis(screenAnalysis: InterviewGeneratorContext['screenA
   ].filter(Boolean);
 
   return lines.length > 0 ? lines.map((line) => `- ${line}`).join('\n') : '- none';
+}
+
+function formatNormalContext(recentTranscript: InterviewGeneratorContext['recentTranscript']): string {
+  const finalTranscript = recentTranscript
+    .filter((item) => item.final && item.text.trim())
+    .slice(-4);
+
+  if (finalTranscript.length === 0) {
+    return '- none';
+  }
+
+  return finalTranscript
+    .map((item) => `- [${item.speaker.toUpperCase()}] ${item.text.trim()}`)
+    .join('\n');
 }
 
 function formatRelevantPhaseHandoffs(
@@ -304,6 +280,7 @@ function formatTranscript(context: InterviewGeneratorContext): string {
   if (transcript.length === 0) {
     return '- none';
   }
+
   return transcript.map((item) => `[${item.speaker.toUpperCase()}] ${item.text}`).join('\n');
 }
 

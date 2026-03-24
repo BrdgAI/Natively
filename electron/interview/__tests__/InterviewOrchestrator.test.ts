@@ -30,11 +30,19 @@ function createAppStateStub() {
 test('clarify first NEXT produces a full pack and repeated NEXT does not drip-feed more clarify content', async () => {
   const llm = new FakeLLMHelper([
     JSON.stringify({
-      speakNow: ['Let me restate the problem first.'],
-      speakIfAsked: ['If helpful, I can also confirm duplicates before I move on.'],
-      writeNow: ['# Output: return indices, not values'],
-      quickQuestions: ['Should I assume the input is unsorted?'],
+      mainLines: [
+        'Let me restate the problem first.',
+        'Should I assume the input is unsorted?',
+        'Write in notes: return indices, not values.',
+      ],
       pinnedFacts: ['Return indices, not values'],
+      clarificationQuestions: [
+        {
+          text: 'Should I assume the input is unsorted?',
+          why: 'Sortedness changes the solution shape.',
+        },
+      ],
+      code: null,
     }),
   ]);
   const orchestrator = new InterviewOrchestrator(llm as never, createAppStateStub() as never);
@@ -43,19 +51,20 @@ test('clarify first NEXT produces a full pack and repeated NEXT does not drip-fe
 
   const first = await orchestrator.handleNext();
   const clarifyDocument = first.phaseDocuments.p2_clarify;
-  const sectionIds = clarifyDocument.mainSections.map((section) => section.id);
+  const feedLines = clarifyDocument.mainFeed
+    .filter((entry) => entry.type === 'line')
+    .map((entry) => entry.text);
 
-  assert.ok(sectionIds.includes('restate'));
-  assert.ok(sectionIds.includes('question-queue'));
-  assert.ok(sectionIds.includes('write-spec'));
-  assert.ok(sectionIds.includes('example-starter'));
-  assert.equal(first.latestPayload?.speakNow[0], 'Let me restate the problem first.');
+  assert.ok(feedLines.includes('Let me restate the problem first.'));
+  assert.ok(feedLines.includes('Should I assume the input is unsorted?'));
+  assert.ok(feedLines.includes('Write in notes: return indices, not values.'));
+  assert.equal(first.latestPayload?.mainLines[0], 'Let me restate the problem first.');
 
   const second = await orchestrator.handleNext();
 
-  assert.equal(second.phaseDocuments.p2_clarify.updateSummary.status, 'unchanged');
-  assert.equal(second.phaseDocuments.p2_clarify.updateSummary.message, 'No updates');
-  assert.deepEqual(second.latestPayload?.speakNow, first.latestPayload?.speakNow);
+  assert.equal(second.phaseDocuments.p2_clarify.status.status, 'unchanged');
+  assert.equal(second.phaseDocuments.p2_clarify.status.message, 'No updates');
+  assert.deepEqual(second.latestPayload?.mainLines, first.latestPayload?.mainLines);
 
   orchestrator.endSession();
 });
@@ -64,14 +73,24 @@ test('manual routing keeps transcript and sync from auto-switching phases while 
   const llm = new FakeLLMHelper(
     [
       JSON.stringify({
-        speakNow: ['Let me restate the prompt before I code.'],
-        writeNow: ['# Output: return indices, not values'],
-        quickQuestions: ['Should I assume the input is unsorted?'],
+        mainLines: [
+          'Let me restate the prompt before I code.',
+          'Output: return indices, not values.',
+          'Should I assume the input is unsorted?',
+        ],
         pinnedFacts: ['Return indices, not values'],
+        clarificationQuestions: [
+          {
+            text: 'Should I assume the input is unsorted?',
+            why: 'Sortedness changes the approach.',
+          },
+        ],
+        code: null,
       }),
       JSON.stringify({
-        speakNow: ['I will start with brute force, then move to a hash map.'],
+        mainLines: ['I will start with brute force, then move to a hash map.'],
         pinnedFacts: ['Use a hash map for O n time'],
+        code: null,
       }),
     ],
     [
@@ -103,7 +122,7 @@ test('manual routing keeps transcript and sync from auto-switching phases while 
 
   assert.equal(orchestrator.getState().phase, 'p2_clarify');
 
-  await orchestrator.shiftManualPhase(1);
+  orchestrator.shiftManualPhase(1);
   await orchestrator.handleNext();
   orchestrator.setMainScrollOffset(480);
 
@@ -124,7 +143,7 @@ test('manual routing keeps transcript and sync from auto-switching phases while 
   });
 
   assert.ok(approachPrompt.includes('Clarify handoff'));
-  assert.ok(approachPrompt.includes('# Output: return indices, not values'));
+  assert.ok(approachPrompt.includes('Output: return indices, not values.'));
   assert.ok(approachPrompt.includes('Should I assume the input is unsorted?'));
 
   orchestrator.endSession();

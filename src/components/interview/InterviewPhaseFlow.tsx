@@ -29,12 +29,12 @@ const InterviewPhaseFlow: React.FC<InterviewPhaseFlowProps> = ({ activePhase, ma
               className={[
                 'inline-flex items-center gap-1 rounded-[6px] border px-2 py-0.5 text-[10px] font-semibold interview-text',
                 isActive
-                  ? 'border-[rgba(120,80,20,0.30)] bg-[rgba(200,130,25,0.18)] text-[#5a3208]'
-                  : 'interview-item-pill border-[rgba(71,58,48,0.12)] text-[#6a5030]',
+                  ? 'border-[rgba(229,183,111,0.60)] bg-[rgba(206,143,59,0.22)] text-[#fff0d2]'
+                  : 'border-[rgba(255,220,180,0.12)] bg-[rgba(255,255,255,0.04)] text-[#d8c4aa]',
               ].join(' ')}
             >
               <span>{phase.label}</span>
-              {isManual && <span className="text-[9px] text-[#8a7050]">M</span>}
+              {isManual && <span className="text-[9px] text-[#f2ddb6]">M</span>}
             </div>
           </React.Fragment>
         )

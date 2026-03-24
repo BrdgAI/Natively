@@ -1,59 +1,82 @@
 import {
-  InterviewAnchorBlock,
-  InterviewMainSection,
+  InterviewClarificationItem,
+  InterviewCodePane,
+  InterviewFeedEntry,
+  InterviewFeedLineState,
   InterviewOverlayPayload,
-  InterviewPhase,
   InterviewPhaseDocument,
-  InterviewQuickAnswerItem,
+  InterviewRenderStatus,
+  InterviewSavedContext,
+  InterviewSavedContexts,
   InterviewSessionSnapshot,
   RenderableInterviewPhase,
 } from './types';
 
+export interface InterviewComposeOptions {
+  clarificationItems?: InterviewClarificationItem[];
+  savedContexts: InterviewSavedContexts;
+  diffText?: string | null;
+}
+
 export class InterviewMainDocComposer {
   public compose(
     snapshot: InterviewSessionSnapshot,
-    payload: InterviewOverlayPayload
+    payload: InterviewOverlayPayload,
+    options: InterviewComposeOptions
   ): InterviewPhaseDocument {
-    const phase = payload.phase;
-    const previous = snapshot.phaseDocuments[phase];
-    const anchor = hasAnchorContent(payload.anchor) ? normalizeAnchor(payload.anchor) : buildFallbackAnchor(snapshot, phase, payload);
-    const nextSections = payload.mainSections && payload.mainSections.length > 0
-      ? payload.mainSections.map(normalizeSection).filter((section) => section.lines.length > 0)
-      : buildFallbackSections(snapshot, phase, payload);
-    const mainSections = mergeSections(previous.mainSections, nextSections);
-    const quickAnswers = buildQuickAnswers(payload.quickQuestions, previous.quickAnswers);
-    const codePanel = payload.codePanel ? cloneCodePanel(payload.codePanel) : previous.codePanel;
-    const extractedText = { ...previous.extractedText };
-    const updateSummary = payload.updateSummary || deriveUpdateSummary(payload);
+    const previous = snapshot.phaseDocuments[payload.phase];
+    const updatedFeed = applyPhaseStateUpdates(
+      previous.mainFeed,
+      payload.phase,
+      options.clarificationItems,
+      payload.mainLines.length > 0
+    );
+    const nextFeed = payload.mainLines.length > 0
+      ? [...updatedFeed, ...buildBlockEntries(payload.phase, payload.mainLines, updatedFeed, options.clarificationItems)]
+      : updatedFeed;
+    const codePanes = buildCodePanes(previous, snapshot, payload, options.diffText || null);
+    const status = buildStatus(payload, codePanes.codeUpdated);
 
     return {
-      phase,
-      anchor,
-      mainSections: mainSections.length > 0 ? mainSections : previous.mainSections,
-      quickAnswers,
-      codePanel,
-      extractedText,
-      updateSummary,
+      phase: payload.phase,
+      mainFeed: nextFeed.length > 0 ? nextFeed : previous.mainFeed,
+      primaryCode: codePanes.primaryCode,
+      secondaryCode: codePanes.secondaryCode,
+      savedContexts: cloneSavedContexts(options.savedContexts),
+      status,
       scrollOffset: previous.scrollOffset,
       lastUpdatedAt: payload.generatedAt,
     };
   }
 
-  public withUpdatedExtractedText(
+  public withSavedScreenContext(
     document: InterviewPhaseDocument,
-    extractedText: InterviewPhaseDocument['extractedText'],
-    message: string,
-    updatedSections: string[]
+    screenContext: InterviewSavedContext,
+    message: string
   ): InterviewPhaseDocument {
     return {
       ...document,
-      extractedText,
-      updateSummary: {
-        status: updatedSections.length > 0 ? 'updated' : 'unchanged',
-        updatedSections,
-        message,
-        at: Date.now(),
+      savedContexts: {
+        ...cloneSavedContexts(document.savedContexts),
+        screen: cloneSavedContext(screenContext),
       },
+      status: buildContextStatus('Screen Context', message),
+      lastUpdatedAt: Date.now(),
+    };
+  }
+
+  public withSavedNormalContext(
+    document: InterviewPhaseDocument,
+    normalContext: InterviewSavedContext,
+    message: string
+  ): InterviewPhaseDocument {
+    return {
+      ...document,
+      savedContexts: {
+        ...cloneSavedContexts(document.savedContexts),
+        normal: cloneSavedContext(normalContext),
+      },
+      status: buildContextStatus('Normal Context', message),
       lastUpdatedAt: Date.now(),
     };
   }
@@ -61,7 +84,7 @@ export class InterviewMainDocComposer {
   public withNoUpdate(document: InterviewPhaseDocument, message: string): InterviewPhaseDocument {
     return {
       ...document,
-      updateSummary: {
+      status: {
         status: 'unchanged',
         updatedSections: [],
         message,
@@ -72,89 +95,22 @@ export class InterviewMainDocComposer {
   }
 }
 
-function cloneCodePanel(codePanel: NonNullable<InterviewOverlayPayload['codePanel']>): InterviewPhaseDocument['codePanel'] {
+function buildContextStatus(section: string, message: string): InterviewRenderStatus {
   return {
-    language: codePanel.language,
-    mode: codePanel.mode,
-    content: codePanel.content,
-    narration: [...codePanel.narration],
-    suspectedMistakes: [...codePanel.suspectedMistakes],
+    status: 'updated',
+    updatedSections: [section],
+    message,
+    at: Date.now(),
   };
 }
 
-function hasAnchorContent(anchor: InterviewOverlayPayload['anchor']): anchor is InterviewAnchorBlock {
-  if (!anchor) {
-    return false;
-  }
-  return Boolean(anchor.title || anchor.items.length > 0 || anchor.writeNow.length > 0 || anchor.note);
-}
-
-function normalizeAnchor(anchor: InterviewAnchorBlock): InterviewAnchorBlock {
-  return {
-    title: anchor.title.trim() || 'Current focus',
-    items: uniqueStrings(anchor.items),
-    writeNow: uniqueStrings(anchor.writeNow),
-    note: anchor.note ? anchor.note.trim() : null,
-  };
-}
-
-function normalizeSection(section: InterviewMainSection): InterviewMainSection {
-  return {
-    id: section.id.trim() || 'section',
-    title: section.title.trim() || 'Section',
-    lines: uniqueStrings(section.lines),
-    tone: section.tone,
-  };
-}
-
-function mergeSections(previous: InterviewMainSection[], next: InterviewMainSection[]): InterviewMainSection[] {
-  const nextById = new Map(next.map((section) => [section.id, section]));
-  const merged: InterviewMainSection[] = [];
-
-  for (const section of previous) {
-    const replacement = nextById.get(section.id);
-    if (replacement) {
-      merged.push(replacement);
-      nextById.delete(section.id);
-    } else {
-      merged.push(section);
-    }
-  }
-
-  for (const section of next) {
-    if (nextById.has(section.id)) {
-      merged.push(section);
-      nextById.delete(section.id);
-    }
-  }
-
-  return merged;
-}
-
-function buildQuickAnswers(nextQuickQuestions: string[], previous: InterviewQuickAnswerItem[]): InterviewQuickAnswerItem[] {
-  const normalized = uniqueStrings(nextQuickQuestions);
-  if (normalized.length === 0) {
-    return previous;
-  }
-
-  return normalized.slice(0, 8).map((line, index) => ({
-    id: `quick-answer-${index + 1}`,
-    line,
-  }));
-}
-
-function deriveUpdateSummary(payload: InterviewOverlayPayload): InterviewPhaseDocument['updateSummary'] {
+function buildStatus(payload: InterviewOverlayPayload, codeUpdated: boolean): InterviewRenderStatus {
   const updatedSections: string[] = [];
-  if (payload.mainSections && payload.mainSections.length > 0) {
-    updatedSections.push('Main');
-  } else if (payload.speakNow.length > 0 || payload.writeNow.length > 0) {
+  if (payload.mainLines.length > 0) {
     updatedSections.push('Main');
   }
-  if (payload.codePanel?.content) {
+  if (codeUpdated) {
     updatedSections.push('Code');
-  }
-  if (payload.quickQuestions.length > 0) {
-    updatedSections.push('Quick Answers');
   }
 
   return {
@@ -165,148 +121,276 @@ function deriveUpdateSummary(payload: InterviewOverlayPayload): InterviewPhaseDo
   };
 }
 
-function buildFallbackAnchor(
-  snapshot: InterviewSessionSnapshot,
+function applyPhaseStateUpdates(
+  feed: InterviewFeedEntry[],
   phase: RenderableInterviewPhase,
-  payload: InterviewOverlayPayload
-): InterviewAnchorBlock {
+  clarificationItems?: InterviewClarificationItem[],
+  hasNewLines?: boolean
+): InterviewFeedEntry[] {
+  const nextFeed = feed.map(cloneFeedEntry);
+
+  if (phase === 'p2_clarify' && clarificationItems) {
+    const itemsById = new Map(clarificationItems.map((item) => [item.id, item]));
+    for (const entry of nextFeed) {
+      if (entry.type !== 'line' || !entry.clarificationId) {
+        continue;
+      }
+
+      const item = itemsById.get(entry.clarificationId);
+      if (!item) {
+        continue;
+      }
+
+      entry.state = mapClarificationStatus(item.status);
+    }
+  }
+
+  if (phase === 'p5_test' && hasNewLines) {
+    for (const entry of nextFeed) {
+      if (entry.type !== 'line' || entry.state === 'answered' || entry.state === 'replaced') {
+        continue;
+      }
+      entry.state = 'replaced';
+    }
+  }
+
+  return nextFeed;
+}
+
+function buildBlockEntries(
+  phase: RenderableInterviewPhase,
+  lines: string[],
+  previousFeed: InterviewFeedEntry[],
+  clarificationItems?: InterviewClarificationItem[]
+): InterviewFeedEntry[] {
+  const blockIndex = previousFeed.filter((entry) => entry.type === 'header').length + 1;
+  const blockId = `${phase}-block-${blockIndex}`;
+  const blockLabel = buildBlockLabel(phase, blockIndex);
+  const hasPreviousContent = previousFeed.some((entry) => entry.type === 'line');
+  const entries: InterviewFeedEntry[] = [
+    {
+      id: `${blockId}-header`,
+      blockId,
+      type: 'header',
+      blockLabel,
+      text: blockLabel,
+      state: null,
+      clarificationId: null,
+    },
+    {
+      id: `${blockId}-divider`,
+      blockId,
+      type: 'divider',
+      blockLabel,
+      text: null,
+      state: null,
+      clarificationId: null,
+    },
+  ];
+
+  lines.forEach((line, index) => {
+    const classification = classifyLine(phase, line, index, hasPreviousContent, clarificationItems);
+    entries.push({
+      id: `${blockId}-line-${index + 1}`,
+      blockId,
+      type: 'line',
+      blockLabel,
+      text: normalize(line),
+      state: classification.state,
+      clarificationId: classification.clarificationId,
+    });
+  });
+
+  return entries;
+}
+
+function classifyLine(
+  phase: RenderableInterviewPhase,
+  line: string,
+  index: number,
+  hasPreviousContent: boolean,
+  clarificationItems?: InterviewClarificationItem[]
+): { state: InterviewFeedLineState; clarificationId: string | null } {
+  if (phase === 'p2_clarify' && clarificationItems) {
+    const clarificationItem = matchClarificationItem(line, clarificationItems);
+    if (clarificationItem) {
+      return {
+        state: mapClarificationStatus(clarificationItem.status),
+        clarificationId: clarificationItem.id,
+      };
+    }
+
+    if (index === 0 || isNoteLine(line)) {
+      return {
+        state: 'note',
+        clarificationId: null,
+      };
+    }
+  }
+
+  return {
+    state: hasPreviousContent ? 'update' : 'active',
+    clarificationId: null,
+  };
+}
+
+function matchClarificationItem(
+  line: string,
+  clarificationItems: InterviewClarificationItem[]
+): InterviewClarificationItem | null {
+  const normalizedLine = normalize(line);
+  for (const item of clarificationItems) {
+    const normalizedQuestion = normalize(item.text);
+    if (!normalizedQuestion) {
+      continue;
+    }
+    if (normalizedLine === normalizedQuestion || normalizedLine.includes(normalizedQuestion)) {
+      return item;
+    }
+  }
+  return null;
+}
+
+function isNoteLine(line: string): boolean {
+  return /^(write|note|input:|output:|constraints?:|edge cases?:|example:|trace:|#)/i.test(line.trim());
+}
+
+function mapClarificationStatus(status: InterviewClarificationItem['status']): InterviewFeedLineState {
+  switch (status) {
+    case 'answered':
+      return 'answered';
+    case 'replaced':
+    case 'retired':
+      return 'replaced';
+    default:
+      return 'open';
+  }
+}
+
+function buildBlockLabel(phase: RenderableInterviewPhase, blockIndex: number): string {
+  if (blockIndex === 1) {
+    return `${formatPhaseLabel(phase)} - Initial`;
+  }
+
+  if (phase === 'p5_test') {
+    return `${formatPhaseLabel(phase)} - New dry run`;
+  }
+
+  return `${formatPhaseLabel(phase)} - Update ${blockIndex}`;
+}
+
+function buildCodePanes(
+  previous: InterviewPhaseDocument,
+  snapshot: InterviewSessionSnapshot,
+  payload: InterviewOverlayPayload,
+  diffText: string | null
+): { primaryCode: InterviewCodePane | null; secondaryCode: InterviewCodePane | null; codeUpdated: boolean } {
+  const snapshotCode = mapSnapshotCode(snapshot);
+  const previousPrimary = previous.primaryCode;
+  const hasGeneratedCode = Boolean(payload.code?.content.trim());
+  const currentContent = snapshot.currentCode?.content.trim() || '';
+  const nextContent = payload.code?.content.trim() || '';
+  const hasMeaningfulDiff = Boolean(currentContent && nextContent && currentContent !== nextContent);
+  const emptyNotes: string[] = [];
+
+  if (!hasGeneratedCode) {
+    return {
+      primaryCode: previousPrimary || snapshotCode,
+      secondaryCode: previous.secondaryCode,
+      codeUpdated: false,
+    };
+  }
+
+  const generatedPrimary: InterviewCodePane = {
+    language: payload.code?.language || 'python',
+    kind: 'full',
+    title: payload.phase === 'p6_follow_up' ? 'Updated code' : 'Current code',
+    content: payload.code?.content || '',
+    notes: emptyNotes,
+  };
+
+  const secondaryKind: InterviewCodePane['kind'] = diffText ? 'diff' : 'replacement';
+  const secondaryCode: InterviewCodePane | null = hasMeaningfulDiff
+    ? {
+        language: payload.code?.language || 'python',
+        kind: secondaryKind,
+        title: payload.phase === 'p6_follow_up' ? 'Follow-up changes' : 'Changes',
+        content: diffText || payload.code?.content || '',
+        notes: emptyNotes,
+      }
+    : null;
+
+  if (payload.phase === 'p6_follow_up' && snapshotCode) {
+    return {
+      primaryCode: snapshotCode,
+      secondaryCode,
+      codeUpdated: true,
+    };
+  }
+
+  return {
+    primaryCode: generatedPrimary,
+    secondaryCode,
+    codeUpdated: true,
+  };
+}
+
+function mapSnapshotCode(snapshot: InterviewSessionSnapshot): InterviewCodePane | null {
+  if (!snapshot.currentCode) {
+    return null;
+  }
+
+  return {
+    language: 'python',
+    kind: 'full',
+    title: 'Current code',
+    content: snapshot.currentCode.content,
+    notes: [...snapshot.currentCode.suspectedMistakes],
+  };
+}
+
+function cloneFeedEntry(entry: InterviewFeedEntry): InterviewFeedEntry {
+  return {
+    id: entry.id,
+    blockId: entry.blockId,
+    type: entry.type,
+    blockLabel: entry.blockLabel,
+    text: entry.text,
+    state: entry.state,
+    clarificationId: entry.clarificationId,
+  };
+}
+
+function cloneSavedContexts(savedContexts: InterviewSavedContexts): InterviewSavedContexts {
+  return {
+    screen: cloneSavedContext(savedContexts.screen),
+    normal: cloneSavedContext(savedContexts.normal),
+  };
+}
+
+function cloneSavedContext(savedContext: InterviewSavedContext): InterviewSavedContext {
+  return {
+    title: savedContext.title,
+    lines: [...savedContext.lines],
+    updatedAt: savedContext.updatedAt,
+  };
+}
+
+function formatPhaseLabel(phase: RenderableInterviewPhase): string {
   switch (phase) {
     case 'p2_clarify':
-      return {
-        title: 'Clarify',
-        items: uniqueStrings([
-          snapshot.problemStatement,
-          ...snapshot.clarifiedFacts.slice(0, 2),
-          ...payload.pinnedFacts.slice(0, 2),
-        ]),
-        writeNow: uniqueStrings(payload.writeNow.slice(0, 3)),
-        note: snapshot.openQuestions.length > 0 ? `${snapshot.openQuestions.length} open questions tracked` : null,
-      };
+      return 'Clarify';
     case 'p3_approach':
-      return {
-        title: 'Approach',
-        items: uniqueStrings([
-          ...snapshot.approachSummary.slice(0, 2),
-          ...payload.speakNow.slice(0, 1),
-        ]),
-        writeNow: uniqueStrings(payload.writeNow.slice(0, 2)),
-        note: payload.speakIfAsked[0] || null,
-      };
+      return 'Approach';
     case 'p4_code':
-      return {
-        title: 'Code',
-        items: uniqueStrings([
-          ...payload.pinnedFacts.slice(0, 2),
-          ...snapshot.requirementChanges.slice(0, 1),
-        ]),
-        writeNow: uniqueStrings(payload.writeNow.slice(0, 3)),
-        note: payload.codePanel?.mode === 'diff' ? 'Diff mode active' : 'Full solution visible',
-      };
+      return 'Code';
     case 'p5_test':
-      return {
-        title: 'Test',
-        items: uniqueStrings([
-          snapshot.phaseDocuments.p5_test.extractedText.dryRunInput,
-          ...payload.quickQuestions.slice(0, 1),
-        ]),
-        writeNow: [],
-        note: payload.speakIfAsked[0] || null,
-      };
+      return 'Test';
     case 'p6_follow_up':
-      return {
-        title: 'Follow-up',
-        items: uniqueStrings([
-          snapshot.activeFollowUp?.request || '',
-          snapshot.activeFollowUp?.impactedArea || '',
-          ...snapshot.requirementChanges.slice(0, 1),
-        ]),
-        writeNow: uniqueStrings(payload.writeNow.slice(0, 2)),
-        note: snapshot.activeFollowUp?.diffRequired ? 'Diff required' : payload.codePanel?.mode === 'diff' ? 'Diff ready' : null,
-      };
+      return 'Follow-up';
   }
 }
 
-function buildFallbackSections(
-  snapshot: InterviewSessionSnapshot,
-  phase: RenderableInterviewPhase,
-  payload: InterviewOverlayPayload
-): InterviewMainSection[] {
-  const sections: InterviewMainSection[] = [];
-  const primaryTitle = phase === 'p2_clarify'
-    ? 'Ask in this order'
-    : phase === 'p3_approach'
-      ? 'Speak through the approach'
-      : phase === 'p4_code'
-        ? 'Narrate while coding'
-        : phase === 'p5_test'
-          ? 'Dry run and edge cases'
-          : 'Respond to the follow-up';
-
-  const primaryLines = phase === 'p2_clarify'
-    ? uniqueStrings([
-        ...payload.speakNow,
-        ...snapshot.clarificationItems
-          .filter((item) => item.status === 'pending' || item.status === 'asked')
-          .slice(0, 6)
-          .map((item) => `${item.text}${item.why ? ` (${item.why})` : ''}`),
-      ])
-    : uniqueStrings(payload.speakNow);
-
-  if (primaryLines.length > 0) {
-    sections.push({
-      id: `${phase}-primary`,
-      title: primaryTitle,
-      lines: primaryLines,
-      tone: 'primary',
-    });
-  }
-
-  if (payload.writeNow.length > 0) {
-    sections.push({
-      id: `${phase}-write`,
-      title: phase === 'p4_code' ? 'Type this structure' : 'Write in your notes',
-      lines: uniqueStrings(payload.writeNow),
-      tone: 'secondary',
-    });
-  }
-
-  if (payload.speakIfAsked.length > 0) {
-    sections.push({
-      id: `${phase}-backup`,
-      title: 'Keep ready',
-      lines: uniqueStrings(payload.speakIfAsked),
-      tone: 'secondary',
-    });
-  }
-
-  if (payload.changes.length > 0) {
-    sections.push({
-      id: `${phase}-changes`,
-      title: 'What changed',
-      lines: payload.changes.map((item) => `${item.label}: ${item.detail}`),
-      tone: payload.changes.some((item) => item.severity === 'warning') ? 'warning' : 'secondary',
-    });
-  }
-
-  return sections;
-}
-
-function uniqueStrings(items: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const item of items) {
-    const normalized = item.trim();
-    if (!normalized) {
-      continue;
-    }
-    const key = normalized.toLowerCase();
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    result.push(normalized);
-  }
-
-  return result;
+function normalize(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
 }

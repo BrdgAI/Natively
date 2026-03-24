@@ -1,8 +1,8 @@
 import React from 'react'
-import type { InterviewUpdateSummary } from '../../types/interview'
+import type { InterviewRenderStatus } from '../../types/interview'
 
 interface InterviewUpdateIndicatorProps {
-  summary: InterviewUpdateSummary
+  summary: InterviewRenderStatus
   compact?: boolean
 }
 
@@ -11,12 +11,12 @@ const InterviewUpdateIndicator: React.FC<InterviewUpdateIndicatorProps> = ({ sum
   const isUnchanged = summary.status === 'unchanged'
 
   if (compact) {
-    const dotColor = isUpdated ? 'text-[#1a6b28]' : isUnchanged ? 'text-[#8a7860]' : 'text-[#8a5010]'
+    const dotColor = isUpdated ? 'text-[#8de0a4]' : isUnchanged ? 'text-[#c5b9aa]' : 'text-[#f2d08a]'
 
     return (
-      <div className={`interview-item-pill inline-flex items-center gap-1.5 rounded-[6px] border border-[rgba(71,58,48,0.12)] px-2 py-0.5 text-[10px] font-semibold ${dotColor}`}>
+      <div className={`inline-flex items-center gap-1.5 rounded-[6px] border border-[rgba(255,220,180,0.12)] bg-[rgba(255,255,255,0.06)] px-2 py-0.5 text-[10px] font-semibold ${dotColor}`}>
         <span>●</span>
-        <span className="text-[#3a2a10] interview-text">{summary.message}</span>
+        <span className="text-[#f0dfc5] interview-text">{summary.message}</span>
       </div>
     )
   }

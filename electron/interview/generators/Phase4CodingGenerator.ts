@@ -4,20 +4,17 @@ import { InterviewGeneratorContext, InterviewOverlayPayload } from '../types';
 export class Phase4CodingGenerator extends BaseInterviewGenerator {
   public async generate(context: InterviewGeneratorContext): Promise<InterviewOverlayPayload> {
     const payload = await this.generatePhasePayload('p4_code', context);
-    payload.changes = [
-      ...(payload.codePanel?.content
-        ? [{
-            label: payload.codePanel.mode === 'diff' ? 'Code patch ready' : 'Code ready',
-            detail: 'Use the code panel and the main-lane narration together while typing.',
-            severity: 'updated' as const,
-          }]
-        : []),
-    ]
-    payload.updateSummary = payload.updateSummary || {
-      status: payload.codePanel?.content ? 'updated' : 'partial',
-      updatedSections: payload.codePanel?.content ? ['Main', 'Code'] : ['Main'],
-      message: payload.codePanel?.content ? 'Updated: Main, Code' : 'Updated: Main',
-      at: payload.generatedAt,
+    if (payload.mainLines.length === 0) {
+      payload.mainLines = [
+        'I am going to write the structure first and then fill in the core loop.',
+        'I will keep the implementation aligned with the approach we just agreed on.',
+      ];
+    }
+    if (!payload.code && context.snapshot.currentCode?.content) {
+      payload.code = {
+        language: 'python',
+        content: context.snapshot.currentCode.content,
+      };
     }
     return payload;
   }

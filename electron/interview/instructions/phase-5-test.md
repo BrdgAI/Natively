@@ -10,5 +10,5 @@ Priorities:
 
 Output expectations:
 
-- Main lane should carry the newest dry run and testing story.
-- Anchor should show active input, target function, and expected result.
+- `mainLines` should carry the newest dry run and testing story.
+- Mention the function or code region when it helps clarity.

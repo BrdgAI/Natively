@@ -888,6 +888,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         hasIbmWatsonKey: hasKey(creds.ibmWatsonApiKey),
         ibmWatsonRegion: creds.ibmWatsonRegion || 'us-south',
         hasSonioxKey: hasKey(creds.sonioxApiKey),
+        sonioxSttModel: creds.sonioxSttModel || 'stt-rt-v4',
         hasTavilyKey: hasKey(creds.tavilyApiKey),
         // Dynamic Model Discovery - preferred models
         geminiPreferredModel: creds.geminiPreferredModel || undefined,
@@ -896,7 +897,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         claudePreferredModel: creds.claudePreferredModel || undefined,
       };
     } catch (error: any) {
-      return { hasGeminiKey: false, hasGroqKey: false, hasOpenaiKey: false, hasClaudeKey: false, googleServiceAccountPath: null, sttProvider: 'google', groqSttModel: 'whisper-large-v3-turbo', hasSttGroqKey: false, hasSttOpenaiKey: false, hasDeepgramKey: false, hasElevenLabsKey: false, hasAzureKey: false, azureRegion: 'eastus', hasIbmWatsonKey: false, ibmWatsonRegion: 'us-south', hasSonioxKey: false, hasTavilyKey: false };
+      return { hasGeminiKey: false, hasGroqKey: false, hasOpenaiKey: false, hasClaudeKey: false, googleServiceAccountPath: null, sttProvider: 'google', groqSttModel: 'whisper-large-v3-turbo', hasSttGroqKey: false, hasSttOpenaiKey: false, hasDeepgramKey: false, hasElevenLabsKey: false, hasAzureKey: false, azureRegion: 'eastus', hasIbmWatsonKey: false, ibmWatsonRegion: 'us-south', hasSonioxKey: false, sonioxSttModel: 'stt-rt-v4', hasTavilyKey: false };
     }
   });
 
@@ -1075,22 +1076,79 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  safeHandle("fetch-soniox-stt-models", async (_, apiKey?: string) => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const cm = CredentialsManager.getInstance();
+      const key = apiKey?.trim() || cm.getSonioxApiKey();
+
+      if (!key) {
+        return { success: false, error: 'No Soniox API key available. Please save a key first.' };
+      }
+
+      const { fetchSonioxRealtimeModels } = require('./utils/sonioxModelFetcher');
+      const models = await fetchSonioxRealtimeModels(key);
+      return { success: true, models };
+    } catch (error: any) {
+      console.error("[IPC] Failed to fetch Soniox STT models:", error);
+      const msg = error?.response?.data?.error?.message || error?.response?.data?.message || error.message || 'Failed to fetch Soniox models';
+      return { success: false, error: msg };
+    }
+  });
+
+  safeHandle("set-soniox-stt-model", async (_, model: string) => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      CredentialsManager.getInstance().setSonioxSttModel(model);
+      await appState.reconfigureSttProvider();
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error saving Soniox STT model:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // Helper to sanitize error messages (remove API key references)
   const sanitizeErrorMessage = (msg: string): string => {
     // Remove patterns like ": sk-***...***" or ": sdasdada***...dwwC"
     return msg.replace(/:\s*[a-zA-Z0-9*]+\*+[a-zA-Z0-9*]+\.?$/g, '').trim();
   };
 
-  safeHandle("test-stt-connection", async (_, provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string) => {
+  safeHandle("test-stt-connection", async (_, provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string, model?: string) => {
     console.log(`[IPC] Received test - stt - connection request for provider: ${provider} `);
     try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const cm = CredentialsManager.getInstance();
+
+      let resolvedApiKey = apiKey?.trim();
+      if (!resolvedApiKey) {
+        if (provider === 'groq') resolvedApiKey = cm.getGroqSttApiKey();
+        else if (provider === 'openai') resolvedApiKey = cm.getOpenAiSttApiKey();
+        else if (provider === 'deepgram') resolvedApiKey = cm.getDeepgramApiKey();
+        else if (provider === 'elevenlabs') resolvedApiKey = cm.getElevenLabsApiKey();
+        else if (provider === 'azure') resolvedApiKey = cm.getAzureApiKey();
+        else if (provider === 'ibmwatson') resolvedApiKey = cm.getIbmWatsonApiKey();
+        else if (provider === 'soniox') resolvedApiKey = cm.getSonioxApiKey();
+      }
+
+      const resolvedRegion = region?.trim() || (provider === 'azure'
+        ? cm.getAzureRegion()
+        : provider === 'ibmwatson'
+          ? cm.getIbmWatsonRegion()
+          : undefined);
+      const resolvedModel = model?.trim() || (provider === 'soniox' ? cm.getSonioxSttModel() : undefined);
+
+      if (!resolvedApiKey) {
+        return { success: false, error: 'No API key available. Please save a key first.' };
+      }
+
       if (provider === 'deepgram') {
         // Test Deepgram via WebSocket connection
         const WebSocket = require('ws');
         return await new Promise<{ success: boolean; error?: string }>((resolve) => {
           const url = 'wss://api.deepgram.com/v1/listen?model=nova-3&encoding=linear16&sample_rate=16000&channels=1';
           const ws = new WebSocket(url, {
-            headers: { Authorization: `Token ${apiKey} ` },
+            headers: { Authorization: `Token ${resolvedApiKey} ` },
           });
 
           const timeout = setTimeout(() => {
@@ -1113,47 +1171,18 @@ export function initializeIpcHandlers(appState: AppState): void {
       }
 
       if (provider === 'soniox') {
-        // Test Soniox via WebSocket connection
-        const WebSocket = require('ws');
-        return await new Promise<{ success: boolean; error?: string }>((resolve) => {
-          const ws = new WebSocket('wss://stt-rt.soniox.com/transcribe-websocket');
+        const { fetchSonioxRealtimeModels } = require('./utils/sonioxModelFetcher');
+        const models = await fetchSonioxRealtimeModels(resolvedApiKey);
 
-          const timeout = setTimeout(() => {
-            ws.close();
-            resolve({ success: false, error: 'Connection timed out' });
-          }, 15000);
+        if (!models.length) {
+          return { success: false, error: 'Soniox returned no real-time STT models for this key.' };
+        }
 
-          ws.on('open', () => {
-            // Send a minimal config to validate the API key
-            ws.send(JSON.stringify({
-              api_key: apiKey,
-              model: 'stt-rt-v4',
-              audio_format: 'pcm_s16le',
-              sample_rate: 16000,
-              num_channels: 1,
-            }));
-          });
+        if (resolvedModel && !models.some((entry: { id: string }) => entry.id === resolvedModel)) {
+          return { success: false, error: `Model "${resolvedModel}" is not available for this Soniox account.` };
+        }
 
-          ws.on('message', (msg: any) => {
-            clearTimeout(timeout);
-            try {
-              const res = JSON.parse(msg.toString());
-              if (res.error_code) {
-                resolve({ success: false, error: `${res.error_code}: ${res.error_message}` });
-              } else {
-                resolve({ success: true });
-              }
-            } catch {
-              resolve({ success: true });
-            }
-            ws.close();
-          });
-
-          ws.on('error', (err: any) => {
-            clearTimeout(timeout);
-            resolve({ success: false, error: err.message || 'Connection failed' });
-          });
-        });
+        return { success: true };
       }
 
       const axios = require('axios');
@@ -1183,7 +1212,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         // Scoped keys may lack speech_to_text or user_read but still be usable once permissions are added.
         try {
           await axios.get('https://api.elevenlabs.io/v1/voices', {
-            headers: { 'xi-api-key': apiKey },
+            headers: { 'xi-api-key': resolvedApiKey },
             timeout: 10000,
           });
         } catch (elErr: any) {
@@ -1198,24 +1227,22 @@ export function initializeIpcHandlers(appState: AppState): void {
         }
       } else if (provider === 'azure') {
         // Azure: raw binary with subscription key
-        const azureRegion = region || 'eastus';
         await axios.post(
-          `https://${azureRegion}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US`,
+          `https://${resolvedRegion || 'eastus'}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US`,
           testWav,
           {
-            headers: { 'Ocp-Apim-Subscription-Key': apiKey, 'Content-Type': 'audio/wav' },
+            headers: { 'Ocp-Apim-Subscription-Key': resolvedApiKey, 'Content-Type': 'audio/wav' },
             timeout: 15000,
           }
         );
       } else if (provider === 'ibmwatson') {
         // IBM Watson: raw binary with Basic auth
-        const ibmRegion = region || 'us-south';
         await axios.post(
-          `https://api.${ibmRegion}.speech-to-text.watson.cloud.ibm.com/v1/recognize`,
+          `https://api.${resolvedRegion || 'us-south'}.speech-to-text.watson.cloud.ibm.com/v1/recognize`,
           testWav,
           {
             headers: {
-              Authorization: `Basic ${Buffer.from(`apikey:${apiKey}`).toString('base64')}`,
+              Authorization: `Basic ${Buffer.from(`apikey:${resolvedApiKey}`).toString('base64')}`,
               'Content-Type': 'audio/wav',
             },
             timeout: 15000,
@@ -1234,7 +1261,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
         await axios.post(endpoint, form, {
           headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${resolvedApiKey}`,
             ...form.getHeaders(),
           },
           timeout: 15000,

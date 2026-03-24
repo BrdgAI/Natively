@@ -5,7 +5,7 @@ import { InterviewMainDocComposer } from '../InterviewMainDocComposer';
 import { InterviewMemoryLedger } from '../InterviewMemoryLedger';
 import { InterviewOverlayPayload } from '../types';
 
-test('clarify phase prompt includes the full ordered Phase 2 categories and required section ids', () => {
+test('clarify phase prompt includes the ordered clarify categories and the slim JSON contract', () => {
   const ledger = new InterviewMemoryLedger();
   ledger.startSession('interview', { codingLanguage: 'python' });
   ledger.setProblemStatement('Two Sum', ['Exactly one answer exists'], ['nums = [2,7,11,15], target = 9']);
@@ -25,10 +25,10 @@ test('clarify phase prompt includes the full ordered Phase 2 categories and requ
   assert.ok(outputIndex > inputIndex);
   assert.ok(constraintsIndex > outputIndex);
   assert.ok(edgeCasesIndex > constraintsIndex);
-  assert.ok(prompt.includes('`restate`'));
-  assert.ok(prompt.includes('`question-queue`'));
-  assert.ok(prompt.includes('`write-spec`'));
-  assert.ok(prompt.includes('`example-starter`'));
+  assert.ok(prompt.includes('"mainLines"'));
+  assert.ok(prompt.includes('"clarificationQuestions"'));
+  assert.ok(prompt.includes('"code"'));
+  assert.equal(prompt.includes('`restate`'), false);
 });
 
 test('approach prompt receives confirmed clarify handoff context', () => {
@@ -37,33 +37,21 @@ test('approach prompt receives confirmed clarify handoff context', () => {
 
   ledger.startSession('interview', { codingLanguage: 'python' });
   ledger.setProblemStatement('Two Sum', ['Exactly one answer exists'], ['nums = [2,7,11,15], target = 9']);
+  const snapshot = ledger.getSnapshot();
 
   const clarifyPayload: InterviewOverlayPayload = {
     phase: 'p2_clarify',
     phaseConfidence: 0.9,
     manualOverrideActive: false,
-    speakNow: ['Let me restate the problem first.'],
-    speakIfAsked: [],
-    writeNow: [
-      '# Problem: Two Sum',
-      '# Output: return indices, not values',
+    mainLines: [
+      'Let me restate the problem first.',
+      'Output: return indices, not values.',
     ],
-    thoughtNotes: [],
-    quickQuestions: ['Should I assume the input is unsorted?'],
     pinnedFacts: ['Return indices, not values'],
-    changes: [],
-    mainSections: [
+    clarificationQuestions: [
       {
-        id: 'restate',
-        title: 'Restate First',
-        lines: ['Let me restate the problem first.'],
-        tone: 'primary',
-      },
-      {
-        id: 'write-spec',
-        title: 'Write This In The Doc',
-        lines: ['# Output: return indices, not values'],
-        tone: 'secondary',
+        text: 'Should I assume the input is unsorted?',
+        why: 'Sortedness changes the approach.',
       },
     ],
     freshness: {
@@ -72,13 +60,15 @@ test('approach prompt receives confirmed clarify handoff context', () => {
       generatedMsAgo: 0,
     },
     generatedAt: Date.now(),
-    inputRevision: ledger.getSnapshot().inputRevision,
+    inputRevision: snapshot.inputRevision,
   };
 
-  const phaseDocument = composer.compose(ledger.getSnapshot(), clarifyPayload);
+  const phaseDocument = composer.compose(snapshot, clarifyPayload, {
+    savedContexts: snapshot.phaseDocuments.p2_clarify.savedContexts,
+  });
   ledger.applyGeneratedPayload(clarifyPayload, phaseDocument, undefined, {
     summaryLines: ['Let me restate the problem first.'],
-    confirmedSpecLines: ['# Output: return indices, not values'],
+    confirmedSpecLines: ['Output: return indices, not values.'],
     openQuestions: ['Should I assume the input is unsorted?'],
     updatedAt: clarifyPayload.generatedAt,
   });
@@ -90,6 +80,6 @@ test('approach prompt receives confirmed clarify handoff context', () => {
   });
 
   assert.ok(prompt.includes('Clarify handoff'));
-  assert.ok(prompt.includes('# Output: return indices, not values'));
+  assert.ok(prompt.includes('Output: return indices, not values.'));
   assert.ok(prompt.includes('Should I assume the input is unsorted?'));
 });

@@ -10,6 +10,6 @@ Priorities:
 
 Output expectations:
 
-- Use the main lane for the full spoken flow.
-- Keep the anchor concise: chosen approach, complexity, and alignment line.
-- Avoid fragmenting the explanation into too many separate blocks.
+- Use `mainLines` for the full spoken flow.
+- Keep the explanation ordered and linear.
+- Avoid fragmenting the explanation into too many separate ideas.

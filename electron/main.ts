@@ -780,9 +780,10 @@ export class AppState {
       }
     } else if (sttProvider === 'soniox') {
       const apiKey = CredentialsManager.getInstance().getSonioxApiKey();
+      const model = CredentialsManager.getInstance().getSonioxSttModel();
       if (apiKey) {
-        console.log(`[Main] Using SonioxStreamingSTT for ${speaker}`);
-        stt = new SonioxStreamingSTT(apiKey);
+        console.log(`[Main] Using SonioxStreamingSTT for ${speaker} with model ${model}`);
+        stt = new SonioxStreamingSTT(apiKey, model);
       } else {
         console.warn(`[Main] No API key for Soniox STT, falling back to GoogleSTT`);
         stt = new GoogleSTT();

@@ -240,6 +240,11 @@ interface ProviderSelectProps {
     onChange: (value: string) => void;
 }
 
+interface SonioxModelOption {
+    id: string;
+    label: string;
+}
+
 const ProviderSelect: React.FC<ProviderSelectProps> = ({ value, options, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -808,8 +813,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [hasStoredIbmWatsonKey, setHasStoredIbmWatsonKey] = useState(false);
     const [sttSonioxKey, setSttSonioxKey] = useState('');
     const [hasStoredSonioxKey, setHasStoredSonioxKey] = useState(false);
+    const [sonioxSttModel, setSonioxSttModel] = useState('stt-rt-v4');
+    const [sonioxSttModels, setSonioxSttModels] = useState<SonioxModelOption[]>([]);
+    const [sonioxSttModelsLoading, setSonioxSttModelsLoading] = useState(false);
+    const [sonioxSttModelsError, setSonioxSttModelsError] = useState('');
+    const [isSonioxModelDropdownOpen, setIsSonioxModelDropdownOpen] = useState(false);
     const [isSttDropdownOpen, setIsSttDropdownOpen] = useState(false);
     const sttDropdownRef = React.useRef<HTMLDivElement>(null);
+    const sonioxModelDropdownRef = React.useRef<HTMLDivElement>(null);
 
     // Close STT dropdown when clicking outside
     useEffect(() => {
@@ -817,12 +828,18 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             if (sttDropdownRef.current && !sttDropdownRef.current.contains(event.target as Node)) {
                 setIsSttDropdownOpen(false);
             }
+            if (sonioxModelDropdownRef.current && !sonioxModelDropdownRef.current.contains(event.target as Node)) {
+                setIsSonioxModelDropdownOpen(false);
+            }
         };
         if (isSttDropdownOpen) {
             document.addEventListener('mousedown', handleClickOutside);
         }
+        if (isSonioxModelDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [isSttDropdownOpen]);
+    }, [isSonioxModelDropdownOpen, isSttDropdownOpen]);
 
     // Load STT settings on mount
     useEffect(() => {
@@ -833,6 +850,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 if (creds) {
                     setSttProvider(creds.sttProvider || 'google');
                     if (creds.groqSttModel) setGroqSttModel(creds.groqSttModel);
+                    if (creds.sonioxSttModel) setSonioxSttModel(creds.sonioxSttModel);
                     setGoogleServiceAccountPath(creds.googleServiceAccountPath);
                     setHasStoredSttGroqKey(creds.hasSttGroqKey);
                     setHasStoredSttOpenaiKey(creds.hasSttOpenaiKey);
@@ -851,11 +869,54 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         if (isOpen) loadSttSettings();
     }, [isOpen]);
 
+    const persistSonioxSttModel = async (modelId: string) => {
+        setSonioxSttModel(modelId);
+        try {
+            await window.electronAPI?.setSonioxSttModel?.(modelId);
+        } catch (e) {
+            console.error('Failed to save Soniox STT model:', e);
+        }
+    };
+
+    const handleFetchSonioxModels = async (apiKeyOverride?: string) => {
+        setSonioxSttModelsLoading(true);
+        setSonioxSttModelsError('');
+
+        try {
+            const result = await window.electronAPI?.fetchSonioxSttModels?.(apiKeyOverride?.trim() || sttSonioxKey.trim() || undefined);
+
+            if (!result?.success || !result.models?.length) {
+                setSonioxSttModels([]);
+                setSonioxSttModelsError(result?.error || 'No Soniox real-time models returned.');
+                return;
+            }
+
+            setSonioxSttModels(result.models);
+
+            const preferredModel = result.models.some((entry) => entry.id === sonioxSttModel)
+                ? sonioxSttModel
+                : result.models[0].id;
+
+            if (preferredModel !== sonioxSttModel) {
+                await persistSonioxSttModel(preferredModel);
+            }
+        } catch (e: any) {
+            console.error('Failed to fetch Soniox models:', e);
+            setSonioxSttModels([]);
+            setSonioxSttModelsError(e.message || 'Failed to fetch Soniox models');
+        } finally {
+            setSonioxSttModelsLoading(false);
+        }
+    };
+
     const handleSttProviderChange = async (provider: 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox') => {
         setSttProvider(provider);
         setIsSttDropdownOpen(false);
         setSttTestStatus('idle');
         setSttTestError('');
+        if (provider !== 'soniox') {
+            setIsSonioxModelDropdownOpen(false);
+        }
         try {
             // @ts-ignore
             await window.electronAPI?.setSttProvider?.(provider);
@@ -877,7 +938,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             const testResult = await window.electronAPI?.testSttConnection?.(
                 provider,
                 key.trim(),
-                provider === 'azure' ? sttAzureRegion : undefined
+                provider === 'azure' ? sttAzureRegion : undefined,
+                provider === 'soniox' ? sonioxSttModel : undefined
             );
 
             if (!testResult?.success) {
@@ -918,7 +980,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             else if (provider === 'elevenlabs') setHasStoredElevenLabsKey(true);
             else if (provider === 'azure') setHasStoredAzureKey(true);
             else if (provider === 'ibmwatson') setHasStoredIbmWatsonKey(true);
-            else if (provider === 'soniox') setHasStoredSonioxKey(true);
+            else if (provider === 'soniox') {
+                setHasStoredSonioxKey(true);
+                void handleFetchSonioxModels(key.trim());
+            }
             else setHasStoredDeepgramKey(true);
 
             setSttSaved(true);
@@ -966,6 +1031,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 await window.electronAPI?.setSonioxApiKey?.('');
                 setSttSonioxKey('');
                 setHasStoredSonioxKey(false);
+                setSonioxSttModels([]);
+                setSonioxSttModelsError('');
+                setIsSonioxModelDropdownOpen(false);
             } else {
                 // @ts-ignore
                 await window.electronAPI?.setDeepgramApiKey?.('');
@@ -996,8 +1064,17 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             elevenlabs: sttElevenLabsKey, azure: sttAzureKey, ibmwatson: sttIbmKey,
             soniox: sttSonioxKey,
         };
+        const hasStoredKeyMap: Record<string, boolean> = {
+            groq: hasStoredSttGroqKey,
+            openai: hasStoredSttOpenaiKey,
+            deepgram: hasStoredDeepgramKey,
+            elevenlabs: hasStoredElevenLabsKey,
+            azure: hasStoredAzureKey,
+            ibmwatson: hasStoredIbmWatsonKey,
+            soniox: hasStoredSonioxKey,
+        };
         const keyToTest = keyMap[sttProvider] || '';
-        if (!keyToTest.trim()) {
+        if (!keyToTest.trim() && !hasStoredKeyMap[sttProvider]) {
             setSttTestStatus('error');
             setSttTestError('Please enter an API key first');
             return;
@@ -1010,7 +1087,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             const result = await window.electronAPI?.testSttConnection?.(
                 sttProvider,
                 keyToTest.trim(),
-                sttProvider === 'azure' ? sttAzureRegion : undefined
+                sttProvider === 'azure' ? sttAzureRegion : undefined,
+                sttProvider === 'soniox' ? sonioxSttModel : undefined
             );
             if (result?.success) {
                 setSttTestStatus('success');
@@ -2745,6 +2823,72 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                 </div>
                                             )}
 
+                                            {sttProvider === 'soniox' && (
+                                                <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-3">
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <div>
+                                                            <label className="text-xs font-medium text-text-secondary block">Soniox Real-time Model</label>
+                                                            <p className="text-[10px] text-text-tertiary mt-1">Fetched live from Soniox `GET /v1/models` so the list stays current.</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                void handleFetchSonioxModels();
+                                                            }}
+                                                            disabled={sonioxSttModelsLoading || (!sttSonioxKey.trim() && !hasStoredSonioxKey)}
+                                                            className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-border-subtle bg-accent-primary/10 text-accent-primary border-accent-primary/20 hover:bg-accent-primary/20 disabled:opacity-50 flex items-center gap-2 shrink-0"
+                                                        >
+                                                            {sonioxSttModelsLoading ? (
+                                                                <><RefreshCw size={12} className="animate-spin" /> Fetching...</>
+                                                            ) : (
+                                                                <><RefreshCw size={12} /> Fetch Models</>
+                                                            )}
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="relative" ref={sonioxModelDropdownRef}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (sonioxSttModels.length > 0) {
+                                                                    setIsSonioxModelDropdownOpen(!isSonioxModelDropdownOpen);
+                                                                }
+                                                            }}
+                                                            className={`w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-left text-sm text-text-primary focus:outline-none focus:border-accent-primary transition-colors flex items-center justify-between ${sonioxSttModels.length > 0 ? 'hover:bg-bg-elevated' : 'opacity-80 cursor-default'}`}
+                                                        >
+                                                            <span className="truncate pr-3">
+                                                                {sonioxSttModels.find((entry) => entry.id === sonioxSttModel)?.label || sonioxSttModel || 'Fetch Soniox models'}
+                                                            </span>
+                                                            <ChevronDown size={14} className={`text-text-secondary transition-transform ${isSonioxModelDropdownOpen ? 'rotate-180' : ''} ${sonioxSttModels.length === 0 ? 'opacity-50' : ''}`} />
+                                                        </button>
+
+                                                        {isSonioxModelDropdownOpen && sonioxSttModels.length > 0 && (
+                                                            <div className="absolute top-full left-0 mt-1 w-full bg-bg-elevated border border-border-subtle rounded-lg shadow-xl z-30 max-h-64 overflow-y-auto animated fadeIn">
+                                                                <div className="p-1 space-y-0.5">
+                                                                    {sonioxSttModels.map((entry) => (
+                                                                        <button
+                                                                            key={entry.id}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setIsSonioxModelDropdownOpen(false);
+                                                                                void persistSonioxSttModel(entry.id);
+                                                                            }}
+                                                                            className={`w-full text-left px-3 py-2 text-xs rounded-md flex items-center justify-between transition-colors ${sonioxSttModel === entry.id ? 'bg-bg-input text-text-primary' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
+                                                                        >
+                                                                            <span className="truncate pr-3">{entry.label}</span>
+                                                                            {sonioxSttModel === entry.id && <Check size={14} className="text-accent-primary shrink-0" />}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {sonioxSttModelsError && (
+                                                        <p className="text-[10px] text-red-400">{sonioxSttModelsError}</p>
+                                                    )}
+                                                </div>
+                                            )}
+
                                             {/* Google Cloud Service Account */}
                                             {sttProvider === 'google' && (
                                                 <div className="bg-bg-card rounded-xl border border-border-subtle p-4">
@@ -2828,6 +2972,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                 const keyMap: Record<string, string> = {
                                                                     groq: sttGroqKey, openai: sttOpenaiKey, deepgram: sttDeepgramKey,
                                                                     elevenlabs: sttElevenLabsKey, azure: sttAzureKey, ibmwatson: sttIbmKey,
+                                                                    soniox: sttSonioxKey,
                                                                 };
                                                                 handleSttKeySubmit(sttProvider as any, keyMap[sttProvider] || '');
                                                             }}
@@ -2920,7 +3065,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                     deepgram: 'https://console.deepgram.com',
                                                                     elevenlabs: 'https://elevenlabs.io/app/settings/api-keys',
                                                                     azure: 'https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeech',
-                                                                    ibmwatson: 'https://cloud.ibm.com/catalog/services/speech-to-text'
+                                                                    ibmwatson: 'https://cloud.ibm.com/catalog/services/speech-to-text',
+                                                                    soniox: 'https://console.soniox.com'
                                                                 };
                                                                 if (urls[sttProvider]) {
                                                                     // @ts-ignore

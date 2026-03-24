@@ -43,6 +43,7 @@ export interface StoredCredentials {
     ibmWatsonApiKey?: string;
     ibmWatsonRegion?: string;
     sonioxApiKey?: string;
+    sonioxSttModel?: string;
     sttLanguage?: string;
     aiResponseLanguage?: string;
     // Tavily Search
@@ -148,6 +149,10 @@ export class CredentialsManager {
 
     public getSonioxApiKey(): string | undefined {
         return this.credentials.sonioxApiKey;
+    }
+
+    public getSonioxSttModel(): string {
+        return this.credentials.sonioxSttModel || 'stt-rt-v4';
     }
 
     public getTavilyApiKey(): string | undefined {
@@ -267,6 +272,12 @@ export class CredentialsManager {
         this.credentials.sonioxApiKey = key;
         this.saveCredentials();
         console.log('[CredentialsManager] Soniox API Key updated');
+    }
+
+    public setSonioxSttModel(model: string): void {
+        this.credentials.sonioxSttModel = model;
+        this.saveCredentials();
+        console.log(`[CredentialsManager] Soniox STT Model set to: ${model}`);
     }
 
     public setTavilyApiKey(key: string): void {

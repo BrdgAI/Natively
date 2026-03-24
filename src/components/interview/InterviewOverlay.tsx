@@ -1,14 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { AnimatePresence } from 'framer-motion'
 import InterviewCodePanel from './InterviewCodePanel'
-import InterviewControlStrip from './InterviewControlStrip'
-import InterviewDiffPanel from './InterviewDiffPanel'
-import InterviewExtractedTextPanel from './InterviewExtractedTextPanel'
+import InterviewContextFooter from './InterviewContextFooter'
 import InterviewMainPanel from './InterviewMainPanel'
-import InterviewNotesRail from './InterviewNotesRail'
 import InterviewTopStrip from './InterviewTopStrip'
 import type {
-  InterviewExtractedTextSummary,
   InterviewPhaseDocumentMap,
   InterviewPhaseHandoffMap,
   InterviewSessionSnapshot,
@@ -60,8 +55,6 @@ const EMPTY_SNAPSHOT: InterviewSessionSnapshot = {
   examples: [],
   approachSummary: [],
   pinnedFacts: [],
-  thoughtNotes: [],
-  quickQuestions: [],
   requirementChanges: [],
   activeFollowUp: null,
   phaseHandoffs: EMPTY_PHASE_HANDOFFS,
@@ -80,11 +73,11 @@ const SCROLL_STEP = 220
 
 const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onEndMeeting }) => {
   const [snapshot, setSnapshot] = useState<InterviewSessionSnapshot>(EMPTY_SNAPSHOT)
-  const [now, setNow] = useState(Date.now())
   const [mousePassthrough, setMousePassthrough] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollTimerRef = useRef<number | null>(null)
   const { isShortcutPressed } = useShortcuts()
+
   const isReservedShortcutPressed = (event: KeyboardEvent | React.KeyboardEvent) => {
     return isShortcutPressed(event, 'reservedShortcut1')
       || isShortcutPressed(event, 'reservedShortcut2')
@@ -138,18 +131,11 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
       }
     })
 
-    const interval = window.setInterval(() => {
-      if (mounted) {
-        setNow(Date.now())
-      }
-    }, 500)
-
     return () => {
       mounted = false
       if (cleanupState) cleanupState()
       if (cleanupMouse) cleanupMouse()
       if (cleanupShortcuts) cleanupShortcuts()
-      window.clearInterval(interval)
       if (scrollTimerRef.current) {
         window.clearTimeout(scrollTimerRef.current)
       }
@@ -176,14 +162,7 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
     }
   }, [activeDocument.scrollOffset])
 
-  const isControlStripVisible = Boolean(snapshot.controlStripVisibleUntil && snapshot.controlStripVisibleUntil > now)
-
-  const showDiffPanel = Boolean(
-    activeDocument.codePanel?.mode === 'diff'
-      && (activePhase === 'p4_code' || activePhase === 'p6_follow_up')
-  )
-
-  const showExtractedText = hasExtractedContent(activeDocument.extractedText)
+  const hasSecondaryCode = Boolean(activeDocument.secondaryCode?.content.trim())
 
   const handleNext = async () => {
     const nextSnapshot = await window.electronAPI?.interviewNext?.()
@@ -194,13 +173,6 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
 
   const handleSync = async () => {
     const nextSnapshot = await window.electronAPI?.interviewSync?.()
-    if (nextSnapshot) {
-      setSnapshot(nextSnapshot)
-    }
-  }
-
-  const handlePhaseShift = async (direction: -1 | 1) => {
-    const nextSnapshot = await window.electronAPI?.interviewShiftPhase?.(direction)
     if (nextSnapshot) {
       setSnapshot(nextSnapshot)
     }
@@ -237,71 +209,55 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
   return (
     <div
       className="pointer-events-none fixed inset-0 overflow-hidden"
-      style={{ opacity: Math.max(0.72, Math.min(1, 0.7 + overlayOpacity * 0.28)) }}
+      style={{ opacity: Math.max(0.76, Math.min(1, 0.72 + overlayOpacity * 0.26)) }}
     >
       <div
         className="absolute inset-0"
-        style={{ background: 'rgba(0, 0, 0, 0.04)' }}
+        style={{ background: 'rgba(8, 6, 4, 0.24)' }}
       />
       <div className="relative z-10 h-full w-full px-3 pb-2 pt-2">
-        <div className="mx-auto flex h-full max-w-[1640px] flex-col gap-2">
+        <div className="mx-auto flex h-full max-w-[1680px] flex-col gap-2">
           <InterviewTopStrip
             phase={snapshot.phase}
             manualOverridePhase={snapshot.manualOverridePhase}
-            routingMode={snapshot.routingMode}
             isGenerating={snapshot.isGenerating}
             mousePassthrough={mousePassthrough}
-            updateSummary={activeDocument.updateSummary}
+            status={activeDocument.status}
             onNext={handleNext}
             onSync={handleSync}
             onExitInterviewMode={handleExitInterviewMode}
             onEndMeeting={onEndMeeting}
           />
 
-          <AnimatePresence>
-            {isControlStripVisible && (
-              <InterviewControlStrip
-                hint={snapshot.controlStripHint}
-                activePhase={activePhase}
-                mousePassthrough={mousePassthrough}
-                onPrevPhase={() => handlePhaseShift(-1)}
-                onNextPhase={() => handlePhaseShift(1)}
-                onExitInterviewMode={handleExitInterviewMode}
-              />
-            )}
-          </AnimatePresence>
-
           <div
             className={[
               'grid min-h-0 flex-1 gap-2',
-              showDiffPanel
-                ? 'xl:grid-cols-[minmax(0,1fr)_500px_280px]'
-                : 'xl:grid-cols-[minmax(0,1fr)_500px]',
+              hasSecondaryCode
+                ? 'xl:grid-cols-[minmax(0,1fr)_360px_320px]'
+                : 'xl:grid-cols-[minmax(0,1fr)_360px]',
             ].join(' ')}
           >
             <InterviewMainPanel
-              snapshot={snapshot}
               document={activeDocument}
               scrollRef={scrollRef}
               onScroll={handleScroll}
+              emptyMessage={snapshot.statusMessage || 'Press Cmd+Enter when you want the current phase document to load.'}
             />
 
-            <div className="grid min-h-0 gap-2 xl:grid-rows-[minmax(0,1fr)_auto]">
-              <InterviewCodePanel snapshot={snapshot} document={activeDocument} />
-              <InterviewNotesRail snapshot={snapshot} phase={activePhase} />
-            </div>
+            <InterviewCodePanel
+              codePane={activeDocument.primaryCode}
+              emptyMessage="Primary code will appear here once coding starts or after screen sync captures visible code."
+            />
 
-            {showDiffPanel && (
-              <InterviewDiffPanel
-                codePanel={activeDocument.codePanel}
-                phase={activePhase}
+            {hasSecondaryCode && (
+              <InterviewCodePanel
+                codePane={activeDocument.secondaryCode}
+                emptyMessage="No changes yet."
               />
             )}
           </div>
 
-          {showExtractedText && (
-            <InterviewExtractedTextPanel extractedText={activeDocument.extractedText} />
-          )}
+          <InterviewContextFooter savedContexts={activeDocument.savedContexts} />
         </div>
       </div>
     </div>
@@ -311,23 +267,22 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
 function createEmptyPhaseDocument(phase: RenderableInterviewPhase) {
   return {
     phase,
-    anchor: {
-      title: formatPhase(phase),
-      items: [],
-      writeNow: [],
-      note: null,
+    mainFeed: [],
+    primaryCode: null,
+    secondaryCode: null,
+    savedContexts: {
+      screen: {
+        title: 'Last screen context saved',
+        lines: [],
+        updatedAt: null,
+      },
+      normal: {
+        title: 'Last normal context saved',
+        lines: [],
+        updatedAt: null,
+      },
     },
-    mainSections: [],
-    quickAnswers: [],
-    codePanel: null,
-    extractedText: {
-      problemText: '',
-      requirementDelta: [],
-      dryRunInput: '',
-      codeObservations: [],
-      capturedAt: null,
-    },
-    updateSummary: {
+    status: {
       status: 'partial' as const,
       updatedSections: [],
       message: 'Waiting for first update',
@@ -349,30 +304,6 @@ function createEmptyPhaseHandoff() {
 
 function normalizePhase(phase: InterviewSessionSnapshot['phase']): RenderableInterviewPhase {
   return phase === 'p1_intro' ? 'p2_clarify' : phase
-}
-
-function formatPhase(phase: RenderableInterviewPhase): string {
-  switch (phase) {
-    case 'p2_clarify':
-      return 'Clarify'
-    case 'p3_approach':
-      return 'Approach'
-    case 'p4_code':
-      return 'Code'
-    case 'p5_test':
-      return 'Test'
-    case 'p6_follow_up':
-      return 'Follow-up'
-  }
-}
-
-function hasExtractedContent(e: InterviewExtractedTextSummary): boolean {
-  return Boolean(
-    e.problemText
-    || e.requirementDelta.length > 0
-    || e.dryRunInput
-    || e.codeObservations.length > 0
-  )
 }
 
 export default InterviewOverlay

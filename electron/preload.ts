@@ -56,7 +56,7 @@ interface ElectronAPI {
   setGroqApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   setOpenaiApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   setClaudeApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
-  getStoredCredentials: () => Promise<{ hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; googleServiceAccountPath: string | null; sttProvider: string; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; hasSonioxKey: boolean }>
+  getStoredCredentials: () => Promise<{ hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; googleServiceAccountPath: string | null; sttProvider: string; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; hasSonioxKey: boolean; sonioxSttModel?: string }>
 
   // STT Provider Management
   setSttProvider: (provider: 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox') => Promise<{ success: boolean; error?: string }>
@@ -70,7 +70,9 @@ interface ElectronAPI {
   setIbmWatsonApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   setGroqSttModel: (model: string) => Promise<{ success: boolean; error?: string }>
   setSonioxApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
-  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string) => Promise<{ success: boolean; error?: string }>
+  setSonioxSttModel: (model: string) => Promise<{ success: boolean; error?: string }>
+  fetchSonioxSttModels: (apiKey?: string) => Promise<{ success: boolean; models?: { id: string; label: string }[]; error?: string }>
+  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string, model?: string) => Promise<{ success: boolean; error?: string }>
 
   // Native Audio Service Events
   onNativeAudioTranscript: (callback: (transcript: { speaker: string; text: string; final: boolean }) => void) => () => void
@@ -518,7 +520,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setIbmWatsonApiKey: (apiKey: string) => ipcRenderer.invoke("set-ibmwatson-api-key", apiKey),
   setGroqSttModel: (model: string) => ipcRenderer.invoke("set-groq-stt-model", model),
   setSonioxApiKey: (apiKey: string) => ipcRenderer.invoke("set-soniox-api-key", apiKey),
-  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string) => ipcRenderer.invoke("test-stt-connection", provider, apiKey, region),
+  setSonioxSttModel: (model: string) => ipcRenderer.invoke("set-soniox-stt-model", model),
+  fetchSonioxSttModels: (apiKey?: string) => ipcRenderer.invoke("fetch-soniox-stt-models", apiKey),
+  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string, model?: string) => ipcRenderer.invoke("test-stt-connection", provider, apiKey, region, model),
 
   // Native Audio Service Events
   onNativeAudioTranscript: (callback: (transcript: { speaker: string; text: string; final: boolean }) => void) => {

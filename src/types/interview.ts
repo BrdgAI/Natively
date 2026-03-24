@@ -21,8 +21,6 @@ export type InterviewCodePanelMode =
 
 export type InterviewUpdateStatus = 'updated' | 'unchanged' | 'partial'
 
-export type InterviewMainSectionTone = 'primary' | 'secondary' | 'warning'
-
 export type InterviewClarificationStatus =
   | 'pending'
   | 'asked'
@@ -30,52 +28,57 @@ export type InterviewClarificationStatus =
   | 'retired'
   | 'replaced'
 
-export interface InterviewChangeItem {
-  label: string
-  detail: string
-  severity: 'new' | 'updated' | 'warning'
-}
+export type InterviewFeedEntryType = 'header' | 'divider' | 'line'
 
-export interface InterviewCodePanel {
+export type InterviewFeedLineState =
+  | 'active'
+  | 'open'
+  | 'answered'
+  | 'replaced'
+  | 'update'
+  | 'note'
+
+export type InterviewCodePaneKind = 'full' | 'diff' | 'replacement'
+
+export interface InterviewGeneratedCode {
   language: 'python' | 'unknown'
-  mode: InterviewCodePanelMode
   content: string
-  narration: string[]
-  suspectedMistakes: string[]
 }
 
-export interface InterviewAnchorBlock {
-  title: string
-  items: string[]
-  writeNow: string[]
-  note: string | null
-}
-
-export interface InterviewMainSection {
+export interface InterviewFeedEntry {
   id: string
+  blockId: string
+  type: InterviewFeedEntryType
+  blockLabel: string | null
+  text: string | null
+  state: InterviewFeedLineState | null
+  clarificationId: string | null
+}
+
+export interface InterviewCodePane {
+  language: 'python' | 'unknown'
+  kind: InterviewCodePaneKind
+  title: string
+  content: string
+  notes: string[]
+}
+
+export interface InterviewSavedContext {
   title: string
   lines: string[]
-  tone: InterviewMainSectionTone
+  updatedAt: number | null
 }
 
-export interface InterviewQuickAnswerItem {
-  id: string
-  line: string
+export interface InterviewSavedContexts {
+  screen: InterviewSavedContext
+  normal: InterviewSavedContext
 }
 
-export interface InterviewUpdateSummary {
+export interface InterviewRenderStatus {
   status: InterviewUpdateStatus
   updatedSections: string[]
   message: string
   at: number
-}
-
-export interface InterviewExtractedTextSummary {
-  problemText: string
-  requirementDelta: string[]
-  dryRunInput: string
-  codeObservations: string[]
-  capturedAt: number | null
 }
 
 export interface InterviewClarificationCandidate {
@@ -109,12 +112,11 @@ export interface InterviewPhaseHandoff {
 
 export interface InterviewPhaseDocument {
   phase: RenderableInterviewPhase
-  anchor: InterviewAnchorBlock
-  mainSections: InterviewMainSection[]
-  quickAnswers: InterviewQuickAnswerItem[]
-  codePanel: InterviewCodePanel | null
-  extractedText: InterviewExtractedTextSummary
-  updateSummary: InterviewUpdateSummary
+  mainFeed: InterviewFeedEntry[]
+  primaryCode: InterviewCodePane | null
+  secondaryCode: InterviewCodePane | null
+  savedContexts: InterviewSavedContexts
+  status: InterviewRenderStatus
   scrollOffset: number
   lastUpdatedAt: number | null
 }
@@ -126,18 +128,10 @@ export interface InterviewOverlayPayload {
   phase: RenderableInterviewPhase
   phaseConfidence: number
   manualOverrideActive: boolean
-  speakNow: string[]
-  speakIfAsked: string[]
-  writeNow: string[]
-  thoughtNotes: string[]
-  quickQuestions: string[]
-  codePanel?: InterviewCodePanel
+  mainLines: string[]
+  code?: InterviewGeneratedCode
   pinnedFacts: string[]
-  changes: InterviewChangeItem[]
-  anchor?: InterviewAnchorBlock
-  mainSections?: InterviewMainSection[]
   clarificationQuestions?: InterviewClarificationCandidate[]
-  updateSummary?: InterviewUpdateSummary
   freshness: {
     transcriptUpdatedMsAgo: number
     screenshotUpdatedMsAgo: number | null
@@ -179,8 +173,6 @@ export interface InterviewSessionSnapshot {
   examples: string[]
   approachSummary: string[]
   pinnedFacts: string[]
-  thoughtNotes: string[]
-  quickQuestions: string[]
   requirementChanges: string[]
   activeFollowUp: InterviewFollowUpState | null
   phaseHandoffs: InterviewPhaseHandoffMap

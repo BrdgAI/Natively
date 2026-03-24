@@ -10,6 +10,6 @@ Priorities:
 
 Output expectations:
 
-- The code panel should contain full code or a focused diff.
-- The main lane should contain what the user says while typing.
-- Quick answers should hold only interruption-ready coding explanations.
+- `mainLines` should contain what the user says while typing.
+- `code` should contain the full code when code is needed.
+- Do not output diffs. Return the full updated code and let the backend derive the change view.
