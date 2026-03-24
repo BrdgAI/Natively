@@ -1,6 +1,4 @@
 import { EventEmitter } from 'events';
-import type { AppState } from '../main';
-import { LLMHelper } from '../LLMHelper';
 import { InterviewClarifyPlanner } from './InterviewClarifyPlanner';
 import {
   isLikelyIncompleteMainLines,
@@ -24,7 +22,9 @@ import {
   InterviewBufferEntry,
   InterviewClarificationCandidate,
   InterviewClarificationItem,
+  InterviewChatProvider,
   InterviewGeneratorContext,
+  InterviewCaptureProvider,
   InterviewModeConfig,
   InterviewOverlayPayload,
   InterviewPhase,
@@ -60,7 +60,7 @@ export class InterviewOrchestrator extends EventEmitter {
   private prefetchInFlight = false;
   private lastScreenAnalysis: InterviewScreenAnalysis | null = null;
 
-  constructor(private readonly llmHelper: LLMHelper, private readonly appState: AppState) {
+  constructor(private readonly llmHelper: InterviewChatProvider, private readonly appState: InterviewCaptureProvider) {
     super();
     this.visionSync = new InterviewVisionSync(llmHelper);
     this.transcriptEpochSummarizer = new InterviewTranscriptEpochSummarizer(llmHelper);

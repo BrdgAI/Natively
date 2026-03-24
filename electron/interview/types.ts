@@ -287,6 +287,20 @@ export interface InterviewGeneratorContext {
   previousPayload?: InterviewOverlayPayload | null;
 }
 
+export interface InterviewCaptureProvider {
+  takeScreenshot(restoreFocus?: boolean): Promise<string>;
+  getImagePreview(filepath: string): Promise<string | undefined>;
+}
+
+export interface InterviewChatProvider {
+  chat(
+    message: string,
+    imagePaths?: string[],
+    context?: string,
+    systemPromptOverride?: string
+  ): Promise<string>;
+}
+
 export interface InterviewModeConfig {
   codingLanguage: 'python';
 }

@@ -1,10 +1,10 @@
-import { LLMHelper } from '../LLMHelper';
 import {
   buildVisionPrompt,
   formatVisionEarlierMemory,
   INTERVIEW_VISION_SYSTEM_PROMPT,
 } from './InterviewPrompts';
 import {
+  InterviewChatProvider,
   InterviewPhase,
   InterviewScreenAnalysis,
   InterviewTranscriptEpoch,
@@ -14,7 +14,7 @@ import {
 type JsonObject = Record<string, unknown>;
 
 export class InterviewVisionSync {
-  constructor(private readonly llmHelper: LLMHelper) {}
+  constructor(private readonly llmHelper: InterviewChatProvider) {}
 
   public async analyze(
     phase: InterviewPhase,

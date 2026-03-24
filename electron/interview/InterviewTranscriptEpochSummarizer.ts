@@ -1,5 +1,5 @@
-import { LLMHelper } from '../LLMHelper';
 import {
+  InterviewChatProvider,
   InterviewEpochSummaryResult,
   InterviewTranscriptEpochSummaryInput,
   InterviewTranscriptSegment,
@@ -20,7 +20,7 @@ Prefer stable decisions, clarified constraints, requirement changes, and unresol
 Do not add markdown, numbering, or extra keys.`;
 
 export class InterviewTranscriptEpochSummarizer {
-  constructor(private readonly llmHelper: LLMHelper) {}
+  constructor(private readonly llmHelper: InterviewChatProvider) {}
 
   public async summarize(input: InterviewTranscriptEpochSummaryInput): Promise<InterviewEpochSummaryResult> {
     try {

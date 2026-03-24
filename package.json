@@ -14,6 +14,7 @@
     "electron:dev": "npm run build:electron && cross-env NODE_ENV=development electron .",
     "electron:build": "npm run build:electron && cross-env NODE_ENV=production electron .",
     "app:dev": "node scripts/app-dev.js",
+    "verify:interview-memory": "npm run build:electron && node scripts/verify-interview-memory.js",
     "app:build": "npm run build && npm run build:electron && cross-env NATIVELY_BUILD_ALL_MAC_ARCHES=1 npm run build:native && electron-builder",
     "sync:local-product": "bash scripts/sync-local-product.sh",
     "feature:new": "bash scripts/new-feature-branch.sh",

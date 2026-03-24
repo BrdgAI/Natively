@@ -1,14 +1,14 @@
-import { LLMHelper } from '../../LLMHelper';
 import { buildPhasePrompt, INTERVIEW_GENERATOR_SYSTEM_PROMPT } from '../InterviewPrompts';
 import { extractInterviewResponse } from '../InterviewResponseExtractor';
 import {
+  InterviewChatProvider,
   InterviewGeneratorContext,
   InterviewOverlayPayload,
   InterviewPhase,
 } from '../types';
 
 export abstract class BaseInterviewGenerator {
-  constructor(protected readonly llmHelper: LLMHelper) {}
+  constructor(protected readonly llmHelper: InterviewChatProvider) {}
 
   protected async generatePhasePayload(phase: InterviewPhase, context: InterviewGeneratorContext): Promise<InterviewOverlayPayload> {
     const raw = await this.llmHelper.chat(
