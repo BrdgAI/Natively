@@ -184,6 +184,15 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
   }, [activeDocument.scrollOffset])
 
   const hasSecondaryCode = Boolean(activeDocument.secondaryCode?.content.trim())
+  const prioritizeCodeRail = hasSecondaryCode && activePhase === 'p6_follow_up'
+  const contentLayoutClassName = prioritizeCodeRail
+    ? 'grid min-h-0 flex-1 gap-2 xl:grid-cols-[minmax(340px,0.72fr)_minmax(980px,1.28fr)] 2xl:grid-cols-[minmax(360px,0.68fr)_minmax(1180px,1.32fr)]'
+    : 'grid min-h-0 flex-1 gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(680px,44%)] 2xl:grid-cols-[minmax(0,1fr)_900px]'
+  const codeRailClassName = prioritizeCodeRail
+    ? 'grid min-h-0 gap-2 grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'
+    : hasSecondaryCode
+      ? 'grid min-h-0 gap-2 grid-cols-[minmax(0,1fr)_300px]'
+      : 'grid min-h-0 gap-2 grid-cols-1'
 
   const handleNext = async () => {
     const nextSnapshot = await window.electronAPI?.interviewNext?.()
@@ -251,9 +260,7 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
           />
 
           <div
-            className={[
-              'grid min-h-0 flex-1 gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(680px,44%)] 2xl:grid-cols-[minmax(0,1fr)_900px]',
-            ].join(' ')}
+            className={contentLayoutClassName}
           >
             <InterviewMainPanel
               document={activeDocument}
@@ -262,14 +269,7 @@ const InterviewOverlay: React.FC<InterviewOverlayProps> = ({ overlayOpacity, onE
               emptyMessage={snapshot.statusMessage || 'Press Cmd+Enter when you want the current phase document to load.'}
             />
 
-            <div
-              className={[
-                'grid min-h-0 gap-2',
-                hasSecondaryCode
-                  ? 'grid-cols-[minmax(0,1fr)_300px]'
-                  : 'grid-cols-1',
-              ].join(' ')}
-            >
+            <div className={codeRailClassName}>
               <InterviewCodePanel
                 codePane={activeDocument.primaryCode}
                 emptyMessage="Primary code will appear here once coding starts or after screen sync captures visible code."

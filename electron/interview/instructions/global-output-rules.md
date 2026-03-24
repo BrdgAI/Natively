@@ -22,7 +22,7 @@ Rules:
 Formatting goals:
 
 - Put the primary spoken script into `mainLines`.
-- Every `mainLines` entry must be one complete sentence on its own line unless the phase explicitly asks for short doc-comment lines.
+- Every `mainLines` entry must be one complete spoken sentence on its own line.
 - Do not add numbering, headers, dividers, or markdown.
 - Use `pinnedFacts` only for short stable carry-forward facts.
 - Return `code` only when code is actually needed.

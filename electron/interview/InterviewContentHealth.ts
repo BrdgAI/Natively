@@ -6,7 +6,6 @@ import {
 const TERMINAL_PUNCTUATION_RE = /[.?!:;"')\]]$/;
 const QUESTION_START_RE = /^(what|why|how|when|where|who|which|can|could|should|would|do|does|did|is|are|am|will|may)\b/i;
 const LABEL_LINE_RE = /^(input|output|values|return|constraint|constraints|edge case|edge cases|example|examples|trace|note|notes|write in notes)\s*:/i;
-
 const HANGING_WORDS = new Set([
   'a',
   'an',
@@ -132,7 +131,7 @@ export function isRepairableLinePair(left: string, right: string): boolean {
 
 export function isLikelyIncompletePhaseDocument(
   document: InterviewPhaseDocument,
-  clarificationItems: InterviewClarificationItem[] = []
+  _clarificationItems: InterviewClarificationItem[] = []
 ): boolean {
   const lineTexts = document.mainFeed
     .filter((entry) => entry.type === 'line' && entry.text)
@@ -147,32 +146,7 @@ export function isLikelyIncompletePhaseDocument(
     return true;
   }
 
-  if (document.phase !== 'p2_clarify' || clarificationItems.length === 0) {
-    return false;
-  }
-
-  const activeClarifications = clarificationItems.filter(
-    (item) => item.status !== 'replaced' && item.status !== 'retired'
-  );
-
-  if (activeClarifications.length === 0) {
-    return false;
-  }
-
-  return activeClarifications.some((item) => !lineTexts.some((line) => matchesClarificationLine(line, item.text)));
-}
-
-function matchesClarificationLine(line: string, question: string): boolean {
-  const normalizedLine = normalizeInterviewLine(line);
-  const normalizedQuestion = normalizeInterviewLine(question);
-  if (!normalizedLine || !normalizedQuestion) {
-    return false;
-  }
-
-  return normalizedLine === normalizedQuestion
-    || normalizedLine.includes(normalizedQuestion)
-    || normalizedQuestion.includes(normalizedLine)
-    || isRepairableLinePair(normalizedLine, normalizedQuestion);
+  return false;
 }
 
 function hasUnclosedDelimiter(value: string): boolean {

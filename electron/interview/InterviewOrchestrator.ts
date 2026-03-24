@@ -1,10 +1,8 @@
 import { EventEmitter } from 'events';
-import { InterviewClarifyPlanner } from './InterviewClarifyPlanner';
+import { buildClarificationId } from './InterviewClarifyPlanner';
 import {
   isLikelyIncompleteMainLines,
   isLikelyIncompletePhaseDocument,
-  isRepairableLinePair,
-  normalizeInterviewLine,
 } from './InterviewContentHealth';
 import { InterviewDiffEngine } from './InterviewDiffEngine';
 import { InterviewMainDocComposer } from './InterviewMainDocComposer';
@@ -20,7 +18,6 @@ import { Phase5TestingGenerator } from './generators/Phase5TestingGenerator';
 import { Phase6FollowUpGenerator } from './generators/Phase6FollowUpGenerator';
 import {
   InterviewBufferEntry,
-  InterviewClarificationCandidate,
   InterviewClarificationItem,
   InterviewChatProvider,
   InterviewGeneratorContext,
@@ -44,6 +41,7 @@ type GeneratorMap = Record<
 >;
 
 const CONTROL_STRIP_DURATION_MS = 2200;
+const QUESTION_LINE_RE = /^(what|why|how|when|where|who|which|can|could|should|would|do|does|did|is|are|am|will|may)\b/i;
 
 export class InterviewOrchestrator extends EventEmitter {
   private readonly ledger = new InterviewMemoryLedger();
@@ -51,7 +49,6 @@ export class InterviewOrchestrator extends EventEmitter {
   private readonly buffer = new InterviewPrefetchBuffer();
   private readonly visionSync: InterviewVisionSync;
   private readonly diffEngine = new InterviewDiffEngine();
-  private readonly clarifyPlanner = new InterviewClarifyPlanner();
   private readonly documentComposer = new InterviewMainDocComposer();
   private readonly transcriptEpochSummarizer: InterviewTranscriptEpochSummarizer;
   private readonly generators: GeneratorMap;
@@ -381,19 +378,13 @@ export class InterviewOrchestrator extends EventEmitter {
   private publishBufferedPayload(entry: InterviewBufferEntry): void {
     const snapshot = this.ledger.getSnapshot();
     const clarificationItems = entry.phase === 'p2_clarify'
-      ? this.clarifyPlanner.plan(
-          snapshot,
-          buildClarificationCandidates(entry.payload),
-          this.ledger.getRecentTranscript()
-        )
+      ? buildClarificationItemsFromPayload(entry.payload)
       : undefined;
     const composedSnapshot = clarificationItems
       ? {
           ...snapshot,
           clarificationItems,
-          openQuestions: clarificationItems
-            .filter((item) => item.status === 'pending' || item.status === 'asked')
-            .map((item) => item.text),
+          openQuestions: extractClarifyOpenQuestions(entry.payload),
         }
       : snapshot;
     const previousDocument = composedSnapshot.phaseDocuments[entry.phase];
@@ -405,7 +396,7 @@ export class InterviewOrchestrator extends EventEmitter {
       diffText,
       forceFreshContent,
     });
-    const phaseHandoff = buildPhaseHandoff(composedSnapshot, entry.payload, phaseDocument, clarificationItems);
+    const phaseHandoff = buildPhaseHandoff(composedSnapshot, entry.payload, phaseDocument);
 
     this.ledger.applyGeneratedPayload(entry.payload, phaseDocument, clarificationItems, phaseHandoff);
     this.ledger.completeFetch(
@@ -452,15 +443,33 @@ function normalizePhase(phase: InterviewPhase): RenderableInterviewPhase {
   return phase === 'p1_intro' ? 'p2_clarify' : phase;
 }
 
-function buildClarificationCandidates(payload: InterviewOverlayPayload): InterviewClarificationCandidate[] {
-  return payload.clarificationQuestions || [];
+function buildClarificationItemsFromPayload(payload: InterviewOverlayPayload): InterviewClarificationItem[] {
+  const reasonsByQuestion = new Map<string, string>();
+
+  for (const question of payload.clarificationQuestions || []) {
+    const normalizedText = normalizeLine(question.text);
+    if (!normalizedText || reasonsByQuestion.has(normalizedText.toLowerCase())) {
+      continue;
+    }
+
+    reasonsByQuestion.set(normalizedText.toLowerCase(), normalizeLine(question.why));
+  }
+
+  return extractClarifyOpenQuestions(payload).map((text) => ({
+    id: buildClarificationId(text),
+    text,
+    why: reasonsByQuestion.get(text.toLowerCase()) || '',
+    status: 'pending',
+    answer: '',
+    revision: payload.inputRevision,
+    replacementReason: '',
+  }));
 }
 
 function buildPhaseHandoff(
   snapshot: InterviewSessionSnapshot,
   payload: InterviewOverlayPayload,
-  phaseDocument: InterviewSessionSnapshot['phaseDocuments'][RenderableInterviewPhase],
-  clarificationItems?: InterviewClarificationItem[]
+  phaseDocument: InterviewSessionSnapshot['phaseDocuments'][RenderableInterviewPhase]
 ): InterviewPhaseHandoff {
   const clarifyHandoff = snapshot.phaseHandoffs.p2_clarify;
   const summaryLines = dedupe(payload.mainLines).slice(0, 8);
@@ -478,11 +487,7 @@ function buildPhaseHandoff(
         ...payload.pinnedFacts,
       ]).slice(0, 10);
   const openQuestions = payload.phase === 'p2_clarify'
-    ? dedupe(
-        (clarificationItems || snapshot.clarificationItems)
-          .filter((item) => item.status === 'pending' || item.status === 'asked')
-          .map((item) => item.text)
-      ).slice(0, 10)
+    ? extractClarifyOpenQuestions(payload).slice(0, 10)
     : dedupe([
         ...clarifyHandoff.openQuestions,
         ...snapshot.openQuestions,
@@ -500,7 +505,14 @@ function buildPhaseHandoff(
 }
 
 function extractSpecLines(lines: string[]): string[] {
-  return lines.filter((line) => /(input|output|value|constraint|return|edge|example|complexity|time|space|approach|note|write)/i.test(line));
+  return lines.filter((line) => /(input|output|value|constraint|return|edge|example|complexity|time|space|assum|bound|limit)/i.test(line));
+}
+
+function extractClarifyOpenQuestions(payload: InterviewOverlayPayload): string[] {
+  return dedupe([
+    ...(payload.clarificationQuestions || []).map((item) => item.text),
+    ...payload.mainLines.filter((line) => looksLikeQuestionLine(line)),
+  ]).slice(0, 10);
 }
 
 function fallbackMainLines(phase: RenderableInterviewPhase, snapshot: InterviewSessionSnapshot): string[] {
@@ -586,6 +598,19 @@ function dedupe(items: string[]): string[] {
   return result;
 }
 
+function normalizeLine(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function looksLikeQuestionLine(value: string): boolean {
+  const normalized = normalizeLine(value);
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized.endsWith('?') || QUESTION_LINE_RE.test(normalized);
+}
+
 function normalizeContent(value: string): string {
   return value.trim().replace(/\r\n/g, '\n');
 }
@@ -622,8 +647,7 @@ function toErrorMessage(error: Error | string | number | boolean | null | undefi
 }
 
 function shouldRetryBufferedPayload(payload: InterviewOverlayPayload): boolean {
-  return isLikelyIncompleteMainLines(payload.mainLines)
-    || hasClarificationCoverageGap(payload);
+  return isLikelyIncompleteMainLines(payload.mainLines);
 }
 
 function shouldRetryIncompletePhase(
@@ -639,30 +663,5 @@ function shouldRetryIncompletePhase(
   }
 
   return isLikelyIncompleteMainLines(snapshot.latestPayload.mainLines)
-    || hasClarificationCoverageGap(snapshot.latestPayload)
     || isLikelyIncompletePhaseDocument(snapshot.phaseDocuments[phase], snapshot.clarificationItems);
-}
-
-function hasClarificationCoverageGap(payload: InterviewOverlayPayload): boolean {
-  if (payload.phase !== 'p2_clarify' || !payload.clarificationQuestions || payload.clarificationQuestions.length === 0) {
-    return false;
-  }
-
-  const lines = payload.mainLines
-    .map((line) => normalizeInterviewLine(line))
-    .filter(Boolean);
-
-  return payload.clarificationQuestions.some((question) => {
-    const normalizedQuestion = normalizeInterviewLine(question.text);
-    if (!normalizedQuestion) {
-      return false;
-    }
-
-    return !lines.some((line) => {
-      return line === normalizedQuestion
-        || line.includes(normalizedQuestion)
-        || normalizedQuestion.includes(line)
-        || isRepairableLinePair(line, normalizedQuestion);
-    });
-  });
 }

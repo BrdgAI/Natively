@@ -54,7 +54,10 @@ test('main doc composer can mark an existing phase document as unchanged', () =>
     phase: 'p2_clarify',
     phaseConfidence: 0.9,
     manualOverrideActive: false,
-    mainLines: ['Let me restate the problem first.', 'Write down the input and output contract.'],
+    mainLines: [
+      'Let me restate the problem first.',
+      'What exactly should be returned: indices or values?',
+    ],
     pinnedFacts: ['Return indices'],
     freshness: {
       transcriptUpdatedMsAgo: 0,
@@ -146,33 +149,20 @@ test('main doc composer appends only net-new lines and reports no updates when n
   assert.equal(partialDocument.status.status, 'updated');
 });
 
-test('main doc composer repairs a truncated clarify line and appends only the truly new lines', () => {
+test('main doc composer replaces clarify lines in place and keeps the feed flat', () => {
   const ledger = new InterviewMemoryLedger();
   const composer = new InterviewMainDocComposer();
 
   ledger.startSession('interview', { codingLanguage: 'python' });
   const initialSnapshot = ledger.getSnapshot();
 
-  const clarificationItems = [
-    {
-      id: 'max-input-size',
-      text: 'What is the maximum input size we should optimize for?',
-      why: 'Input scale changes the target complexity.',
-      status: 'pending' as const,
-      answer: '',
-      revision: initialSnapshot.inputRevision,
-      replacementReason: '',
-    },
-  ];
-
   const firstPayload: InterviewOverlayPayload = {
     phase: 'p2_clarify',
     phaseConfidence: 0.9,
     manualOverrideActive: false,
     mainLines: [
-      'Let me restate the problem first: Two Sum.',
+      'Let me restate the problem first.',
       'What exactly should be returned: indices or values?',
-      'What is the maximum input size we should',
     ],
     pinnedFacts: [],
     freshness: {
@@ -185,46 +175,85 @@ test('main doc composer repairs a truncated clarify line and appends only the tr
   };
 
   const firstDocument = composer.compose(initialSnapshot, firstPayload, {
-    clarificationItems,
     savedContexts: initialSnapshot.phaseDocuments.p2_clarify.savedContexts,
   });
+  ledger.applyGeneratedPayload(firstPayload, firstDocument);
 
-  ledger.applyGeneratedPayload(firstPayload, firstDocument, clarificationItems);
   const secondSnapshot = ledger.getSnapshot();
-
   const secondPayload: InterviewOverlayPayload = {
     ...firstPayload,
     generatedAt: Date.now() + 1,
+    inputRevision: secondSnapshot.inputRevision,
     mainLines: [
       'Let me restate the problem first: Two Sum.',
       'What exactly should be returned: indices or values?',
       'What is the maximum input size we should optimize for?',
-      'Write in notes: return indices, not values.',
     ],
   };
 
-  const repairedDocument = composer.compose(secondSnapshot, secondPayload, {
-    clarificationItems,
+  const appendedDocument = composer.compose(secondSnapshot, secondPayload, {
     savedContexts: secondSnapshot.phaseDocuments.p2_clarify.savedContexts,
   });
-  const repairedLines = repairedDocument.mainFeed
-    .filter((entry) => entry.type === 'line')
-    .map((entry) => entry.text);
+  const feedLines = appendedDocument.mainFeed.filter((entry) => entry.type === 'line');
 
-  assert.deepEqual(repairedLines, [
+  assert.deepEqual(feedLines.map((entry) => entry.text), [
     'Let me restate the problem first: Two Sum.',
     'What exactly should be returned: indices or values?',
     'What is the maximum input size we should optimize for?',
-    'Write in notes: return indices, not values.',
   ]);
-  assert.equal(
-    repairedLines.includes('What is the maximum input size we should'),
-    false
-  );
-  assert.equal(repairedDocument.status.status, 'updated');
+  assert.equal(appendedDocument.mainFeed.every((entry) => entry.type === 'line'), true);
+  assert.equal(appendedDocument.status.status, 'updated');
 });
 
-test('main doc composer treats clarify doc-comment lines as note entries', () => {
+test('main doc composer reports clarify as unchanged when the latest flat lines are text-identical', () => {
+  const ledger = new InterviewMemoryLedger();
+  const composer = new InterviewMainDocComposer();
+
+  ledger.startSession('interview', { codingLanguage: 'python' });
+  const initialSnapshot = ledger.getSnapshot();
+
+  const payload: InterviewOverlayPayload = {
+    phase: 'p2_clarify',
+    phaseConfidence: 0.9,
+    manualOverrideActive: false,
+    mainLines: [
+      'Let me restate the problem first.',
+      'Return: the two indices, not the values.',
+      'Should I assume the input is unsorted?',
+    ],
+    pinnedFacts: ['Return indices, not values.'],
+    freshness: {
+      transcriptUpdatedMsAgo: 0,
+      screenshotUpdatedMsAgo: null,
+      generatedMsAgo: 0,
+    },
+    generatedAt: Date.now(),
+    inputRevision: initialSnapshot.inputRevision,
+  };
+
+  const firstDocument = composer.compose(initialSnapshot, payload, {
+    savedContexts: initialSnapshot.phaseDocuments.p2_clarify.savedContexts,
+  });
+  ledger.applyGeneratedPayload(payload, firstDocument);
+
+  const nextSnapshot = ledger.getSnapshot();
+  const unchangedDocument = composer.compose(nextSnapshot, {
+    ...payload,
+    generatedAt: Date.now() + 1,
+    inputRevision: nextSnapshot.inputRevision,
+  }, {
+    savedContexts: nextSnapshot.phaseDocuments.p2_clarify.savedContexts,
+  });
+
+  assert.equal(unchangedDocument.status.status, 'unchanged');
+  assert.equal(unchangedDocument.mainFeed.every((entry) => entry.type === 'line'), true);
+  assert.deepEqual(
+    unchangedDocument.mainFeed.filter((entry) => entry.type === 'line').map((entry) => entry.text),
+    payload.mainLines
+  );
+});
+
+test('main doc composer keeps clarify entries state-free for rendering', () => {
   const ledger = new InterviewMemoryLedger();
   const composer = new InterviewMainDocComposer();
 
@@ -236,11 +265,11 @@ test('main doc composer treats clarify doc-comment lines as note entries', () =>
     phaseConfidence: 0.9,
     manualOverrideActive: false,
     mainLines: [
-      'Input: array of integers and a target value.',
-      'Values: duplicates are allowed and negatives are possible.',
-      'Return: indices of one valid pair.',
+      'Let me restate the problem first.',
+      'What exactly should be returned: indices or values?',
+      'What is the maximum input size we should optimize for?',
     ],
-    pinnedFacts: ['Return indices of one valid pair.'],
+    pinnedFacts: ['Return indices, not values.'],
     freshness: {
       transcriptUpdatedMsAgo: 0,
       screenshotUpdatedMsAgo: null,
@@ -256,5 +285,5 @@ test('main doc composer treats clarify doc-comment lines as note entries', () =>
   });
   const feedLines = document.mainFeed.filter((entry) => entry.type === 'line');
 
-  assert.deepEqual(feedLines.map((entry) => entry.state), ['note', 'note', 'note']);
+  assert.deepEqual(feedLines.map((entry) => entry.state), [null, null, null]);
 });

@@ -67,8 +67,8 @@ export default function TopPill({
             backdrop-blur-md
             overlay-chip-surface
             overlay-text-interactive
-            text-[12px]
-            font-medium
+            text-[15px]
+            font-semibold
             border
             interaction-base interaction-hover interaction-press
           `}
@@ -90,8 +90,8 @@ export default function TopPill({
             flex items-center gap-1.5
             px-3 py-1.5
             rounded-full
-            text-[11px]
-            font-medium
+            text-[14px]
+            font-semibold
             border
             overlay-chip-surface
             overlay-text-primary

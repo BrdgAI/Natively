@@ -30,6 +30,26 @@ export class InterviewMainDocComposer {
     options: InterviewComposeOptions
   ): InterviewPhaseDocument {
     const previous = snapshot.phaseDocuments[payload.phase];
+    const codePanes = buildCodePanes(previous, snapshot, payload, options.diffText || null);
+
+    if (payload.phase === 'p2_clarify') {
+      const nextFeed = buildClarifyFeed(payload.mainLines);
+      const mainFeed = nextFeed.length > 0 ? nextFeed : previous.mainFeed;
+      const mainUpdated = nextFeed.length > 0 && hasFeedChanged(previous.mainFeed, nextFeed);
+      const status = buildStatus(mainUpdated, codePanes.codeUpdated, payload.generatedAt);
+
+      return {
+        phase: payload.phase,
+        mainFeed,
+        primaryCode: codePanes.primaryCode,
+        secondaryCode: codePanes.secondaryCode,
+        savedContexts: cloneSavedContexts(options.savedContexts),
+        status,
+        scrollOffset: previous.scrollOffset,
+        lastUpdatedAt: payload.generatedAt,
+      };
+    }
+
     const baseFeed = options.forceFreshContent ? [] : previous.mainFeed;
     const mergedLines = mergeDisplayLines(baseFeed, payload.phase, payload.mainLines, options.clarificationItems);
     const updatedFeed = applyPhaseStateUpdates(
@@ -41,7 +61,6 @@ export class InterviewMainDocComposer {
     const nextFeed = mergedLines.lines.length > 0
       ? [...updatedFeed, ...buildBlockEntries(payload.phase, mergedLines.lines, updatedFeed, options.clarificationItems)]
       : updatedFeed;
-    const codePanes = buildCodePanes(previous, snapshot, payload, options.diffText || null);
     const mainUpdated = mergedLines.repaired || mergedLines.lines.length > 0 || hasFeedChanged(previous.mainFeed, updatedFeed);
     const status = buildStatus(mainUpdated, codePanes.codeUpdated, payload.generatedAt);
 
@@ -132,26 +151,10 @@ function buildStatus(mainUpdated: boolean, codeUpdated: boolean, generatedAt: nu
 function applyPhaseStateUpdates(
   feed: InterviewFeedEntry[],
   phase: RenderableInterviewPhase,
-  clarificationItems?: InterviewClarificationItem[],
+  _clarificationItems?: InterviewClarificationItem[],
   hasNewLines?: boolean
 ): InterviewFeedEntry[] {
   const nextFeed = feed.map(cloneFeedEntry);
-
-  if (phase === 'p2_clarify' && clarificationItems) {
-    const itemsById = new Map(clarificationItems.map((item) => [item.id, item]));
-    for (const entry of nextFeed) {
-      if (entry.type !== 'line' || !entry.clarificationId) {
-        continue;
-      }
-
-      const item = itemsById.get(entry.clarificationId);
-      if (!item) {
-        continue;
-      }
-
-      entry.state = mapClarificationStatus(item.status);
-    }
-  }
 
   if (phase === 'p5_test' && hasNewLines) {
     for (const entry of nextFeed) {
@@ -214,70 +217,22 @@ function buildBlockEntries(
 
 function classifyLine(
   phase: RenderableInterviewPhase,
-  line: string,
-  index: number,
+  _line: string,
+  _index: number,
   hasPreviousContent: boolean,
-  clarificationItems?: InterviewClarificationItem[]
-): { state: InterviewFeedLineState; clarificationId: string | null } {
-  if (phase === 'p2_clarify' && clarificationItems) {
-    const clarificationItem = matchClarificationItem(line, clarificationItems);
-    if (clarificationItem) {
-      return {
-        state: mapClarificationStatus(clarificationItem.status),
-        clarificationId: clarificationItem.id,
-      };
-    }
-
-    if (index === 0 || isNoteLine(line)) {
-      return {
-        state: 'note',
-        clarificationId: null,
-      };
-    }
+  _clarificationItems?: InterviewClarificationItem[]
+): { state: InterviewFeedLineState | null; clarificationId: string | null } {
+  if (phase === 'p2_clarify') {
+    return {
+      state: null,
+      clarificationId: null,
+    };
   }
 
   return {
     state: hasPreviousContent ? 'update' : 'active',
     clarificationId: null,
   };
-}
-
-function matchClarificationItem(
-  line: string,
-  clarificationItems: InterviewClarificationItem[]
-): InterviewClarificationItem | null {
-  const normalizedLine = normalize(line);
-  for (const item of clarificationItems) {
-    const normalizedQuestion = normalize(item.text);
-    if (!normalizedQuestion) {
-      continue;
-    }
-    if (
-      normalizedLine === normalizedQuestion
-      || normalizedLine.includes(normalizedQuestion)
-      || normalizedQuestion.includes(normalizedLine)
-      || isRepairableLinePair(normalizedLine, normalizedQuestion)
-    ) {
-      return item;
-    }
-  }
-  return null;
-}
-
-function isNoteLine(line: string): boolean {
-  return /^(write|note|input:|output:|values:|return:|constraints?:|edge cases?:|example:|trace:|#)/i.test(line.trim());
-}
-
-function mapClarificationStatus(status: InterviewClarificationItem['status']): InterviewFeedLineState {
-  switch (status) {
-    case 'answered':
-      return 'answered';
-    case 'replaced':
-    case 'retired':
-      return 'replaced';
-    default:
-      return 'open';
-  }
 }
 
 function buildBlockLabel(phase: RenderableInterviewPhase, blockIndex: number): string {
@@ -423,11 +378,26 @@ function normalizeContent(value: string): string {
   return value.trim().replace(/\r\n/g, '\n');
 }
 
+function buildClarifyFeed(lines: string[]): InterviewFeedEntry[] {
+  return lines
+    .map((line) => normalize(line))
+    .filter(Boolean)
+    .map((line, index): InterviewFeedEntry => ({
+      id: `p2_clarify-line-${index + 1}`,
+      blockId: 'p2_clarify-main',
+      type: 'line',
+      blockLabel: null,
+      text: line,
+      state: null,
+      clarificationId: null,
+    }));
+}
+
 function mergeDisplayLines(
   feed: InterviewFeedEntry[],
-  phase: RenderableInterviewPhase,
+  _phase: RenderableInterviewPhase,
   lines: string[],
-  clarificationItems?: InterviewClarificationItem[]
+  _clarificationItems?: InterviewClarificationItem[]
 ): { feed: InterviewFeedEntry[]; lines: string[]; repaired: boolean } {
   const nextFeed = feed.map(cloneFeedEntry);
   const existing = new Set(
@@ -458,7 +428,6 @@ function mergeDisplayLines(
         existing.delete(previousText.toLowerCase());
       }
       entry.text = normalized;
-      repairLineClassification(entry, phase, normalized, clarificationItems);
       existing.add(key);
       repaired = true;
       continue;
@@ -497,29 +466,6 @@ function findRepairIndex(feed: InterviewFeedEntry[], incomingLine: string): numb
   }
 
   return bestIndex;
-}
-
-function repairLineClassification(
-  entry: InterviewFeedEntry,
-  phase: RenderableInterviewPhase,
-  line: string,
-  clarificationItems?: InterviewClarificationItem[]
-): void {
-  if (phase !== 'p2_clarify' || !clarificationItems) {
-    return;
-  }
-
-  const clarificationItem = matchClarificationItem(line, clarificationItems);
-  if (clarificationItem) {
-    entry.state = mapClarificationStatus(clarificationItem.status);
-    entry.clarificationId = clarificationItem.id;
-    return;
-  }
-
-  if (isNoteLine(line)) {
-    entry.state = 'note';
-    entry.clarificationId = null;
-  }
 }
 
 function hasFeedChanged(previous: InterviewFeedEntry[], next: InterviewFeedEntry[]): boolean {

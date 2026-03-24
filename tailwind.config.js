@@ -35,7 +35,8 @@ module.exports = {
         }
       },
       fontFamily: {
-        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+        sans: ["Atkinson Hyperlegible", "Segoe UI", "Aptos", "-apple-system", "BlinkMacSystemFont", "Helvetica Neue", "Helvetica", "Arial", "sans-serif"],
+        mono: ["IBM Plex Mono", "SFMono-Regular", "SF Mono", "Menlo", "Monaco", "Consolas", "monospace"],
         celeb: ["CelebMF", "sans-serif"],
         "celeb-light": ["CelebMFLight", "sans-serif"]
       },

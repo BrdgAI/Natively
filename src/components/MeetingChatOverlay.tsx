@@ -131,15 +131,16 @@ const AssistantMessage: React.FC<{ content: string; isStreaming?: boolean }> = (
                                                 customStyle={{
                                                     margin: 0,
                                                     borderRadius: 0,
-                                                    fontSize: '13px',
-                                                    lineHeight: '1.6',
+                                                    fontSize: '14px',
+                                                    fontWeight: 600,
+                                                    lineHeight: '1.65',
                                                     background: 'transparent',
                                                     padding: '16px',
-                                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+                                                    fontFamily: 'var(--font-interview-code)'
                                                 }}
                                                 wrapLongLines={true}
                                                 showLineNumbers={true}
-                                                lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: 'rgba(255,255,255,0.2)', textAlign: 'right', fontSize: '11px' }}
+                                                lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: 'rgba(255,255,255,0.2)', textAlign: 'right', fontSize: '12px', fontWeight: 600 }}
                                                 {...props}
                                             >
                                                 {String(children).replace(/\n$/, '')}
@@ -147,7 +148,7 @@ const AssistantMessage: React.FC<{ content: string; isStreaming?: boolean }> = (
                                         </div>
                                     </div>
                                 ) : (
-                                    <code className="bg-bg-tertiary px-1.5 py-0.5 rounded text-[13px] font-mono text-text-primary border border-border-subtle whitespace-pre-wrap" {...props}>
+                                    <code className="bg-bg-tertiary px-1.5 py-0.5 rounded text-[14px] font-mono font-semibold text-text-primary border border-border-subtle whitespace-pre-wrap" {...props}>
                                         {children}
                                     </code>
                                 );
@@ -508,7 +509,7 @@ ${contextString}`;
                         <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
                             <div className="flex items-center gap-2 text-text-tertiary">
                                 <img src={nativelyIcon} className="w-3.5 h-3.5 brightness-0 dark:brightness-100 dark:opacity-50 dark:grayscale" alt="logo" />
-                                <span className="text-[13px] font-medium">Search this meeting</span>
+                                <span className="text-[16px] font-semibold">Search this meeting</span>
                             </div>
                             <button
                                 onClick={handleClose}
@@ -532,7 +533,7 @@ ${contextString}`;
                                 <motion.div
                                     initial={{ opacity: 0, y: 4 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className="text-[#FF6B6B] text-[13px] py-2"
+                                    className="text-[#FF6B6B] text-[16px] font-semibold py-2"
                                 >
                                     {errorMessage}
                                 </motion.div>

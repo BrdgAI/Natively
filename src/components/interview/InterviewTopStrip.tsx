@@ -34,13 +34,13 @@ const InterviewTopStrip: React.FC<InterviewTopStripProps> = ({
 
         <div className="flex items-center justify-center gap-2">
           {isGenerating && (
-            <span className="text-[10px] font-bold text-[#f0d6a3] animate-pulse interview-text">Generating…</span>
+            <span className="text-[14px] font-bold text-[#f0d6a3] animate-pulse interview-text">Generating…</span>
           )}
           <InterviewUpdateIndicator summary={status} compact />
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 text-[10px] font-semibold">
+          <div className="flex items-center gap-1 text-[14px] font-semibold">
             <span className="rounded-[5px] border border-[rgba(255,220,180,0.12)] bg-[rgba(255,255,255,0.06)] px-1.5 py-0.5 text-[#f0dfc5] interview-text">⌘↵</span>
             <span className="text-[#e7d7c0] interview-text">Next</span>
             <span className="ml-1 rounded-[5px] border border-[rgba(255,220,180,0.12)] bg-[rgba(255,255,255,0.06)] px-1.5 py-0.5 text-[#f0dfc5] interview-text">⌘⇧↵</span>
@@ -76,7 +76,7 @@ const StripButton = ({
     type="button"
     onClick={onClick}
     className={[
-      'inline-flex items-center gap-1 rounded-[6px] border px-2 py-1 text-[10px] font-semibold transition-colors',
+      'inline-flex items-center gap-1 rounded-[6px] border px-2.5 py-1.5 text-[14px] font-semibold transition-colors',
       danger
         ? 'border-[rgba(180,100,90,0.55)] bg-[rgba(140,52,40,0.72)] text-[#fff3eb] hover:bg-[rgba(155,58,44,0.78)]'
         : 'border-[rgba(255,220,180,0.12)] bg-[rgba(255,255,255,0.06)] text-[#f0dfc5] hover:bg-[rgba(255,255,255,0.10)]',

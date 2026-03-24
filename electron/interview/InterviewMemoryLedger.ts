@@ -784,6 +784,10 @@ export class InterviewMemoryLedger extends EventEmitter {
     targetRevision: number,
     previousDocument: InterviewPhaseDocument
   ): void {
+    if (phase === 'p2_clarify') {
+      return;
+    }
+
     if (!shouldForceFreshGeneration(previousDocument)) {
       return;
     }

@@ -33,8 +33,8 @@ export const GOLDEN_PHASE_PAYLOADS: Record<InterviewOverlayPayload['phase'], Int
       'Can the input be empty or null, and can there be duplicates?',
       'What exactly should be returned if there are multiple valid answers?',
       'Are there explicit time or space constraints, and which optimization matters more?',
-      'Write in notes: return indices, not values.',
-      'Write in notes: nums = [2,7,11,15], target = 9 -> [0,1].',
+      'Unless you want a different contract, I will assume the solution should return indices rather than values.',
+      'If those assumptions sound right, I can move on to the approach next.',
     ],
     pinnedFacts: ['Return indices, not values'],
     clarificationQuestions: [

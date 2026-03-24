@@ -76,6 +76,10 @@ const SolutionSection = ({
             maxWidth: "100%",
             margin: 0,
             padding: "1rem",
+            fontSize: "14px",
+            fontWeight: 600,
+            lineHeight: "1.65",
+            fontFamily: "var(--font-interview-code)",
             whiteSpace: "pre-wrap",
             wordBreak: "break-all"
           }}

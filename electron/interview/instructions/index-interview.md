@@ -19,7 +19,7 @@ Do not return UI sections, side lanes, summaries about the JSON, or assistant fr
 
 Phase intent:
 
-- `p2_clarify` should complete the clarification pass in one shot, ending with doc-ready constraint lines and a clean handoff.
+- `p2_clarify` should complete the clarification pass in one shot, using only plain spoken clarify lines and a clean handoff.
 - `p3_approach` should walk brute force, elimination, chosen approach, and complexity before any code is written.
 - `p4_code` should produce one complete readable implementation while the narration explains the key decisions.
 - `p5_test` should trace with real values, cover edge cases, and restate complexity, returning corrected full code only if a bug is found.

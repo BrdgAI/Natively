@@ -8,15 +8,6 @@ interface InterviewMainPanelProps {
   emptyMessage: string
 }
 
-const LINE_STATE_STYLES: Record<string, { label: string; className: string }> = {
-  active: { label: '', className: 'text-[#efe5d6]' },
-  open: { label: '[open]', className: 'text-[#f6e7b3]' },
-  answered: { label: '[answered]', className: 'text-[#b8e2c0]' },
-  replaced: { label: '[replaced]', className: 'text-[#d9b4aa] opacity-70 line-through' },
-  update: { label: '[update]', className: 'text-[#d9d2ff]' },
-  note: { label: '[note]', className: 'text-[#f0d7aa]' },
-}
-
 const InterviewMainPanel: React.FC<InterviewMainPanelProps> = ({ document, scrollRef, onScroll, emptyMessage }) => {
   let lineNumber = 1
 
@@ -32,7 +23,7 @@ const InterviewMainPanel: React.FC<InterviewMainPanelProps> = ({ document, scrol
             return (
               <div
                 key={entry.id}
-                className="px-2 py-1 text-[9px] font-bold uppercase tracking-[0.08em] text-[#f2debe] interview-text-heading"
+                className="px-2 py-1 text-[12px] font-bold uppercase tracking-[0.08em] text-[#f2debe] interview-text-heading"
               >
                 {entry.text}
               </div>
@@ -48,7 +39,6 @@ const InterviewMainPanel: React.FC<InterviewMainPanelProps> = ({ document, scrol
             )
           }
 
-          const style = LINE_STATE_STYLES[entry.state || 'active']
           const currentLineNumber = lineNumber
           lineNumber += 1
 
@@ -57,13 +47,11 @@ const InterviewMainPanel: React.FC<InterviewMainPanelProps> = ({ document, scrol
               key={`${entry.id}-${index}`}
               entry={entry}
               lineNumber={currentLineNumber}
-              label={style.label}
-              className={style.className}
               alternate={currentLineNumber % 2 === 0}
             />
           )
         }) : (
-          <div className="rounded-[7px] border border-dashed border-[rgba(255,228,200,0.14)] px-2.5 py-2 text-[12px] leading-5 text-[#d5c4ae] interview-text">
+          <div className="rounded-[7px] border border-dashed border-[rgba(255,228,200,0.14)] px-2.5 py-2 text-[15px] leading-6 text-[#d5c4ae] interview-text">
             {emptyMessage}
           </div>
         )}
@@ -75,32 +63,22 @@ const InterviewMainPanel: React.FC<InterviewMainPanelProps> = ({ document, scrol
 const FeedLine = ({
   entry,
   lineNumber,
-  label,
-  className,
   alternate,
 }: {
   entry: InterviewFeedEntry
   lineNumber: number
-  label: string
-  className: string
   alternate: boolean
 }) => (
   <div
     className={[
-      'grid grid-cols-[44px_minmax(0,1fr)] gap-2 rounded-[6px] px-2 py-1.5 text-[12px] leading-[1.42]',
+      'grid grid-cols-[34px_minmax(0,1fr)] gap-2 rounded-[6px] px-2 py-1.5 text-[15px] leading-[1.6] text-[#efe5d6]',
       alternate ? 'bg-[rgba(255,255,255,0.045)]' : 'bg-[rgba(255,255,255,0.02)]',
-      className,
     ].join(' ')}
   >
-    <div className="flex items-start justify-end gap-1 pt-[1px]">
-      <span className="select-none text-[10px] font-mono text-[#8f8376] leading-[1.4]">
+    <div className="flex items-start justify-end pt-[1px]">
+      <span className="select-none text-[13px] font-mono font-semibold text-[#8f8376] leading-[1.5]">
         {lineNumber}
       </span>
-      {label && (
-        <span className="select-none text-[10px] font-bold leading-[1.4]">
-          {label}
-        </span>
-      )}
     </div>
     <div className="font-semibold interview-text">
       {entry.text}

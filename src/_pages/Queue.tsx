@@ -381,15 +381,16 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
                                       customStyle={{
                                         margin: 0,
                                         borderRadius: 0,
-                                        fontSize: '13px',
-                                        lineHeight: '1.6',
+                                        fontSize: '14px',
+                                        fontWeight: 600,
+                                        lineHeight: '1.65',
                                         background: 'transparent',
                                         padding: '16px',
-                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+                                        fontFamily: 'var(--font-interview-code)'
                                       }}
                                       wrapLongLines={true}
                                       showLineNumbers={true}
-                                      lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: 'rgba(255,255,255,0.2)', textAlign: 'right', fontSize: '11px' }}
+                                      lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: 'rgba(255,255,255,0.2)', textAlign: 'right', fontSize: '12px', fontWeight: 600 }}
                                       {...props}
                                     >
                                       {String(children).replace(/\n$/, '')}
@@ -397,7 +398,7 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
                                   </div>
                                 </div>
                               ) : (
-                                <code className="bg-black/20 rounded px-1.5 py-0.5 text-[13px] font-mono border border-white/10" {...props}>
+                                <code className="bg-black/20 rounded px-1.5 py-0.5 text-[14px] font-mono font-semibold border border-white/10" {...props}>
                                   {children}
                                 </code>
                               );

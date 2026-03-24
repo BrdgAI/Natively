@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
 
 @font-face {
   font-family: 'CelebMF';
@@ -21,10 +21,10 @@
 @tailwind utilities;
 
 :root {
-  /* System Fonts - SF Pro */
-  --font-system: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  --font-interview: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, sans-serif;
-  --font-interview-code: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, monospace;
+  /* Readability-first typography */
+  --font-system: "Atkinson Hyperlegible", "Segoe UI", "Aptos", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-interview: "Atkinson Hyperlegible", "Segoe UI", "Aptos", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-interview-code: "IBM Plex Mono", "SF Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
 
   /* --- SEMANTIC TOKEN SYSTEM (DEFAULT: DARK) --- */
   /* Reference Image Matching */
@@ -184,6 +184,10 @@
 }
 
 /* App sizing baseline (required for h-full / flex scroll areas) */
+html {
+  font-size: 19px;
+}
+
 html,
 body,
 #root {
@@ -207,7 +211,37 @@ body,
 
 body {
   margin: 0;
+  font-family: var(--font-system);
+  font-weight: 600;
+  text-rendering: optimizeLegibility;
   /* cursor: default; -> Removed to let app dictate cursor */
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  font-weight: inherit;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-interview-code);
+  font-weight: 700;
+}
+
+.overlay-text-primary,
+.overlay-text-secondary,
+.overlay-text-muted,
+.overlay-input-text,
+.interview-text,
+.interview-text-heading,
+.markdown-content {
+  font-family: var(--font-system);
+  font-weight: 600;
 }
 
 /* Scrollbar Styling - Minimal macOS Hidden style */

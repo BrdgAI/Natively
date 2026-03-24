@@ -27,21 +27,28 @@ function createAppStateStub() {
   };
 }
 
-test('clarify first NEXT produces a full pack and repeated NEXT does not drip-feed more clarify content', async () => {
+test('clarify first NEXT accepts note-style output without retrying and repeated NEXT does not drip-feed more clarify content', async () => {
   const llm = new FakeLLMHelper([
     JSON.stringify({
       mainLines: [
         'Let me restate the problem first.',
+        'Return: the two indices, not the values.',
         'Should I assume the input is unsorted?',
-        'Write in notes: return indices, not values.',
       ],
-      pinnedFacts: ['Return indices, not values'],
+      pinnedFacts: ['Return indices, not values.'],
       clarificationQuestions: [
         {
           text: 'Should I assume the input is unsorted?',
           why: 'Sortedness changes the solution shape.',
         },
       ],
+      code: null,
+    }),
+    JSON.stringify({
+      mainLines: [
+        'This retry response should never be used.',
+      ],
+      pinnedFacts: ['Unexpected retry'],
       code: null,
     }),
   ]);
@@ -55,10 +62,14 @@ test('clarify first NEXT produces a full pack and repeated NEXT does not drip-fe
     .filter((entry) => entry.type === 'line')
     .map((entry) => entry.text);
 
-  assert.ok(feedLines.includes('Let me restate the problem first.'));
-  assert.ok(feedLines.includes('Should I assume the input is unsorted?'));
-  assert.ok(feedLines.includes('Write in notes: return indices, not values.'));
+  assert.deepEqual(feedLines, [
+    'Let me restate the problem first.',
+    'Return: the two indices, not the values.',
+    'Should I assume the input is unsorted?',
+  ]);
+  assert.equal(feedLines.some((line) => (line || '').includes('This retry response should never be used.')), false);
   assert.equal(first.latestPayload?.mainLines[0], 'Let me restate the problem first.');
+  assert.equal(first.latestPayload?.mainLines[1], 'Return: the two indices, not the values.');
   assert.deepEqual(first.latestPayload?.clarificationQuestions, [
     {
       text: 'Should I assume the input is unsorted?',
@@ -81,10 +92,10 @@ test('manual routing keeps transcript and sync from auto-switching phases while 
       JSON.stringify({
         mainLines: [
           'Let me restate the prompt before I code.',
-          'Output: return indices, not values.',
+          'The output should be the two indices, not the values themselves.',
           'Should I assume the input is unsorted?',
         ],
-        pinnedFacts: ['Return indices, not values'],
+        pinnedFacts: ['Return indices, not values.'],
         clarificationQuestions: [
           {
             text: 'Should I assume the input is unsorted?',
@@ -150,7 +161,7 @@ test('manual routing keeps transcript and sync from auto-switching phases while 
   });
 
   assert.ok(approachPrompt.includes('Clarify handoff'));
-  assert.ok(approachPrompt.includes('Output: return indices, not values.'));
+  assert.ok(approachPrompt.includes('Return indices, not values.'));
   assert.ok(approachPrompt.includes('Should I assume the input is unsorted?'));
 
   orchestrator.endSession();
@@ -194,38 +205,39 @@ test('new revisions do not append the full phase block again when the content ha
   const second = await orchestrator.handleNext();
 
   assert.equal(second.phaseDocuments.p3_approach.mainFeed.filter((entry) => entry.type === 'line').length, 2);
-  assert.equal(second.phaseDocuments.p3_approach.status.status, 'updated');
 
   orchestrator.endSession();
 });
 
-test('screen sync after an early weak clarify response can replace the phase with a full fresh dump', async () => {
+test('screen sync after an early weak clarify response replaces the clarify board instead of appending a new block', async () => {
   const llm = new FakeLLMHelper(
     [
       JSON.stringify({
         mainLines: [
           'Let me restate the problem first.',
           'I want to ask a couple of clarification questions.',
+          'What exactly should be returned: indices or values?',
         ],
         pinnedFacts: [],
+        clarificationQuestions: [
+          {
+            text: 'What exactly should be returned: indices or values?',
+            why: 'The return contract changes the implementation.',
+          },
+        ],
         code: null,
       }),
       JSON.stringify({
         mainLines: [
           'Let me restate the problem first: Two Sum.',
+          'The output should be the two indices, not the values themselves.',
           'What is the maximum input size we should optimize for?',
-          'What exactly should be returned: indices or values?',
-          'Write in notes: return indices, not values.',
         ],
         pinnedFacts: ['Return indices, not values.'],
         clarificationQuestions: [
           {
             text: 'What is the maximum input size we should optimize for?',
             why: 'Input scale changes the target complexity.',
-          },
-          {
-            text: 'What exactly should be returned: indices or values?',
-            why: 'The return contract changes the implementation.',
           },
         ],
         code: null,
@@ -258,6 +270,7 @@ test('screen sync after an early weak clarify response can replace the phase wit
     [
       'Let me restate the problem first.',
       'I want to ask a couple of clarification questions.',
+      'What exactly should be returned: indices or values?',
     ]
   );
 
@@ -270,83 +283,32 @@ test('screen sync after an early weak clarify response can replace the phase wit
 
   assert.deepEqual(refreshedLines, [
     'Let me restate the problem first: Two Sum.',
+    'The output should be the two indices, not the values themselves.',
     'What is the maximum input size we should optimize for?',
-    'What exactly should be returned: indices or values?',
-    'Write in notes: return indices, not values.',
   ]);
+  assert.equal(second.phaseDocuments.p2_clarify.mainFeed.every((entry) => entry.type === 'line'), true);
   assert.equal(second.phaseDocuments.p2_clarify.status.status, 'updated');
 
   orchestrator.endSession();
 });
 
-test('same-revision NEXT retries a broken clarify block instead of freezing on no updates', async () => {
+test('clarify handoff carries raw visible questions forward even when the sidecar question list is empty', async () => {
   const llm = new FakeLLMHelper([
     JSON.stringify({
       mainLines: [
         'Let me restate the problem first: Two Sum.',
-        'What exactly should be returned: indices or values?',
+        'Return: the two indices, not the values.',
         'Should I assume there is exactly one valid answer?',
-        'Can the numbers be negative?',
-        'Can there be duplicate values?',
-        'What is the maximum input size we should',
       ],
-      pinnedFacts: [],
-      clarificationQuestions: [
-        {
-          text: 'What exactly should be returned: indices or values?',
-          why: 'The return contract changes the implementation.',
-        },
-        {
-          text: 'Should I assume there is exactly one valid answer?',
-          why: 'The answer guarantee changes edge handling.',
-        },
-        {
-          text: 'Can the numbers be negative?',
-          why: 'Signed values affect test coverage.',
-        },
-        {
-          text: 'Can there be duplicate values?',
-          why: 'Duplicates affect how we store prior values.',
-        },
-        {
-          text: 'What is the maximum input size we should optimize for?',
-          why: 'Input scale changes the target complexity.',
-        },
-      ],
+      pinnedFacts: ['Return indices, not values.'],
+      clarificationQuestions: [],
       code: null,
     }),
     JSON.stringify({
       mainLines: [
-        'Let me restate the problem first: Two Sum.',
-        'What exactly should be returned: indices or values?',
-        'Should I assume there is exactly one valid answer?',
-        'Can the numbers be negative?',
-        'Can there be duplicate values?',
-        'What is the maximum input size we should optimize for?',
+        'I would start with brute force, then move to a hash map.',
       ],
-      pinnedFacts: [],
-      clarificationQuestions: [
-        {
-          text: 'What exactly should be returned: indices or values?',
-          why: 'The return contract changes the implementation.',
-        },
-        {
-          text: 'Should I assume there is exactly one valid answer?',
-          why: 'The answer guarantee changes edge handling.',
-        },
-        {
-          text: 'Can the numbers be negative?',
-          why: 'Signed values affect test coverage.',
-        },
-        {
-          text: 'Can there be duplicate values?',
-          why: 'Duplicates affect how we store prior values.',
-        },
-        {
-          text: 'What is the maximum input size we should optimize for?',
-          why: 'Input scale changes the target complexity.',
-        },
-      ],
+      pinnedFacts: ['Use a hash map.'],
       code: null,
     }),
   ]);
@@ -358,23 +320,26 @@ test('same-revision NEXT retries a broken clarify block instead of freezing on n
   const firstLines = first.phaseDocuments.p2_clarify.mainFeed
     .filter((entry) => entry.type === 'line')
     .map((entry) => entry.text);
-  assert.equal(firstLines[firstLines.length - 1], 'What is the maximum input size we should');
 
-  const second = await orchestrator.handleNext();
-  const secondLines = second.phaseDocuments.p2_clarify.mainFeed
-    .filter((entry) => entry.type === 'line')
-    .map((entry) => entry.text);
-
-  assert.deepEqual(secondLines, [
+  assert.deepEqual(firstLines, [
     'Let me restate the problem first: Two Sum.',
-    'What exactly should be returned: indices or values?',
+    'Return: the two indices, not the values.',
     'Should I assume there is exactly one valid answer?',
-    'Can the numbers be negative?',
-    'Can there be duplicate values?',
-    'What is the maximum input size we should optimize for?',
   ]);
-  assert.equal(second.phaseDocuments.p2_clarify.status.status, 'updated');
-  assert.notEqual(second.phaseDocuments.p2_clarify.status.message, 'No updates found');
+
+  orchestrator.shiftManualPhase(1);
+  await orchestrator.handleNext();
+
+  const state = orchestrator.getState();
+  const approachPrompt = buildPhasePrompt('p3_approach', {
+    snapshot: state,
+    recentTranscript: [],
+    earlierMemory: [],
+    previousPayload: state.latestPayload,
+  });
+
+  assert.ok(state.openQuestions.includes('Should I assume there is exactly one valid answer?'));
+  assert.ok(approachPrompt.includes('Should I assume there is exactly one valid answer?'));
 
   orchestrator.endSession();
 });

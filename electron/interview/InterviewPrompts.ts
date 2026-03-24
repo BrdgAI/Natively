@@ -43,13 +43,16 @@ export function buildPhasePrompt(phase: InterviewPhase, context: InterviewGenera
   const instructions = loadGeneratorInstructions(phase);
   const snapshot = context.snapshot;
   const normalizedPhase = normalizePhase(phase);
+  const runtimeContext = normalizedPhase === 'p2_clarify'
+    ? buildClarifyRuntimeContext(snapshot, context)
+    : buildRuntimeContext(snapshot, context, normalizedPhase);
 
   return [
     instructions.index,
     instructions.global,
     instructions.phase,
     `Current phase: ${normalizedPhase}.`,
-    buildRuntimeContext(snapshot, context, normalizedPhase),
+    runtimeContext,
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -98,7 +101,7 @@ Clarified facts:
 ${formatList(snapshot.clarifiedFacts)}
 
 Open clarification questions:
-${formatClarificationItems(snapshot.clarificationItems)}
+${formatClarificationItems(snapshot.clarificationItems, phase)}
 
 Approach summary:
 ${formatList(snapshot.approachSummary)}
@@ -129,6 +132,31 @@ ${formatRelevantPhaseHandoffs(snapshot, phase)}
 
 Recent transcript:
 ${formatTranscript(context)}`;
+}
+
+function buildClarifyRuntimeContext(
+  snapshot: InterviewSessionSnapshot,
+  context: InterviewGeneratorContext
+): string {
+  const screenAnalysis = context.screenAnalysis;
+
+  return `Problem statement:
+${screenAnalysis?.problemStatement || snapshot.problemStatement || '[not confirmed yet]'}
+
+Visible constraints:
+${formatList(screenAnalysis?.givenConstraints?.length ? screenAnalysis.givenConstraints : snapshot.constraints)}
+
+Visible examples:
+${formatList(screenAnalysis?.examples?.length ? screenAnalysis.examples : snapshot.examples)}
+
+Visible questions:
+${formatList(screenAnalysis?.visibleQuestions || [])}
+
+Visible hints:
+${formatList(screenAnalysis?.hints || [])}
+
+Recent transcript:
+${formatNormalContext(context.recentTranscript)}`;
 }
 
 function buildVisionSchema(phase: RenderableInterviewPhase): string {
@@ -184,13 +212,28 @@ function formatList(items: string[]): string {
   return items.map((item) => `- ${item}`).join('\n');
 }
 
-function formatClarificationItems(items: InterviewClarificationItem[]): string {
-  if (items.length === 0) {
+function formatClarificationItems(
+  items: InterviewClarificationItem[],
+  phase: RenderableInterviewPhase
+): string {
+  const visibleItems = phase === 'p2_clarify'
+    ? items.filter((item) => item.status === 'pending' || item.status === 'asked')
+    : items.filter((item) => item.status !== 'replaced' && item.status !== 'retired');
+
+  if (visibleItems.length === 0) {
     return '- none';
   }
 
-  return items
-    .map((item) => `- [${item.status}] ${item.text}${item.why ? ` | why: ${item.why}` : ''}${item.answer ? ` | answer: ${item.answer}` : ''}`)
+  return visibleItems
+    .map((item) => {
+      if (phase === 'p2_clarify') {
+        return `- ${item.text}`;
+      }
+
+      return item.answer
+        ? `- ${item.text} | answer: ${item.answer}`
+        : `- ${item.text}`;
+    })
     .join('\n');
 }
 

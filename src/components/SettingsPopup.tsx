@@ -189,9 +189,9 @@ const SettingsPopup = () => {
 
     const renderShortcutKeys = (keys: string[], enabled: boolean) => (
         <div className="flex items-center gap-1">
-            {!enabled && <span className={`text-[10px] uppercase tracking-wide ${shortcutOffClass}`}>Off</span>}
+            {!enabled && <span className={`text-[11px] font-semibold uppercase tracking-wide ${shortcutOffClass}`}>Off</span>}
             {keys.map((key, index) => (
-                <div key={index} className={`px-1.5 py-0.5 rounded border text-[10px] font-medium min-w-[20px] text-center ${shortcutKeyClass} ${enabled ? '' : 'opacity-40'}`}>
+                <div key={index} className={`px-1.5 py-0.5 rounded border text-[11px] font-semibold min-w-[20px] text-center ${shortcutKeyClass} ${enabled ? '' : 'opacity-40'}`}>
                     {key}
                 </div>
             ))}
@@ -211,7 +211,7 @@ const SettingsPopup = () => {
                             stroke={isUndetectable ? "none" : "currentColor"}
                             eyeColor={isUndetectable ? (isLightTheme ? "white" : "black") : (isLightTheme ? "#334155" : "white")}
                         />
-                        <span className={`text-[12px] font-medium transition-colors ${isUndetectable ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>{isUndetectable ? 'Undetectable' : 'Detectable'}</span>
+                        <span className={`text-[15px] font-semibold transition-colors ${isUndetectable ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>{isUndetectable ? 'Undetectable' : 'Detectable'}</span>
                     </div>
                     <button
                         onClick={() => {
@@ -234,7 +234,7 @@ const SettingsPopup = () => {
                         <PointerOff
                             className={`w-4 h-4 transition-colors ${isMousePassthrough ? 'text-sky-500' : iconInactiveClass}`}
                         />
-                        <span className={`text-[12px] font-medium transition-colors ${isMousePassthrough ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Mouse Passthrough</span>
+                        <span className={`text-[15px] font-semibold transition-colors ${isMousePassthrough ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Mouse Passthrough</span>
                     </div>
                     <button
                         onClick={() => {
@@ -256,7 +256,7 @@ const SettingsPopup = () => {
                             className={`w-4 h-4 transition-colors ${useGroqFastText ? 'text-orange-500' : iconInactiveClass}`}
                             fill={useGroqFastText ? "currentColor" : "none"}
                         />
-                        <span className={`text-[12px] font-medium transition-colors ${useGroqFastText ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Fast Response</span>
+                        <span className={`text-[15px] font-semibold transition-colors ${useGroqFastText ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Fast Response</span>
                     </div>
                     <button
                         onClick={() => {
@@ -277,7 +277,7 @@ const SettingsPopup = () => {
                             className={`w-3.5 h-3.5 transition-colors ${showTranscript ? 'text-emerald-400' : iconInactiveClass}`}
                             fill={showTranscript ? "currentColor" : "none"}
                         />
-                        <span className={`text-[12px] font-medium transition-colors ${showTranscript ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Transcript</span>
+                        <span className={`text-[14px] font-semibold transition-colors ${showTranscript ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Transcript</span>
                     </div>
                     <button
                         onClick={() => {
@@ -301,7 +301,7 @@ const SettingsPopup = () => {
                                 className={`w-3.5 h-3.5 transition-colors ${profileMode && isPremium ? 'text-accent-primary' : iconInactiveClass}`}
                                 fill={profileMode && isPremium ? "currentColor" : "none"}
                             />
-                            <span className={`text-[12px] font-medium transition-colors ${profileMode && isPremium ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Profile Mode</span>
+                            <span className={`text-[14px] font-semibold transition-colors ${profileMode && isPremium ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Profile Mode</span>
                         </div>
                         <button
                             onClick={async () => {
