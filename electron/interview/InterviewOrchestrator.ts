@@ -500,7 +500,7 @@ function buildPhaseHandoff(
 }
 
 function extractSpecLines(lines: string[]): string[] {
-  return lines.filter((line) => /(input|output|constraint|return|edge|example|complexity|time|space|approach|write)/i.test(line));
+  return lines.filter((line) => /(input|output|value|constraint|return|edge|example|complexity|time|space|approach|note|write)/i.test(line));
 }
 
 function fallbackMainLines(phase: RenderableInterviewPhase, snapshot: InterviewSessionSnapshot): string[] {
@@ -510,24 +510,29 @@ function fallbackMainLines(phase: RenderableInterviewPhase, snapshot: InterviewS
         snapshot.problemStatement
           ? `Let me restate the problem first to make sure I have it right: ${snapshot.problemStatement}`
           : 'Let me restate the problem first so I can confirm the input, output, and constraints before coding.',
-        'I want to ask a few quick clarification questions before I choose an approach.',
+        'The main thing I want to confirm is the input shape, the exact return format, and the important constraints.',
+        'Let me ask a few clarifying questions before I start thinking about an approach.',
       ];
     case 'p3_approach':
       return [
         'I will start with the brute-force idea and then move to the optimized approach.',
+        'I will explain why the optimized direction matches the confirmed constraints.',
         'I want to confirm the final time and space complexity before I code.',
       ];
     case 'p4_code':
       return [
         'I am going to write the structure first and then fill in the core logic.',
+        'I will narrate the key implementation choices as I go so the reasoning stays clear.',
       ];
     case 'p5_test':
       return [
         'Let me dry run the code with one concrete example and then cover edge cases.',
+        'After that I will restate the time and space complexity and call out any optimization trade-offs.',
       ];
     case 'p6_follow_up':
       return [
         'I can make that follow-up change and then summarize the impact clearly.',
+        'After that I will recap the final solution and close with a couple of strong questions.',
       ];
   }
 }

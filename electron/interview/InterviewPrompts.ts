@@ -10,7 +10,7 @@ import {
 
 const OUTPUT_SCHEMA = `Return JSON only with this exact shape:
 {
-  "mainLines": ["one complete sentence per line"],
+  "mainLines": ["one spoken line per entry"],
   "pinnedFacts": ["short stable fact"],
   "clarificationQuestions": [
     {
@@ -27,6 +27,7 @@ Use empty arrays when a section has no content. Use null for code when no code i
 
 export const INTERVIEW_GENERATOR_SYSTEM_PROMPT = `You are writing interview overlay guidance for a live software engineering candidate.
 The user may read directly from the screen.
+Produce output the candidate can read out loud with confidence.
 Everything must sound natural, calm, and professional.
 Never produce chatbot framing.
 Never explain the JSON format.

@@ -223,3 +223,38 @@ test('main doc composer repairs a truncated clarify line and appends only the tr
   );
   assert.equal(repairedDocument.status.status, 'updated');
 });
+
+test('main doc composer treats clarify doc-comment lines as note entries', () => {
+  const ledger = new InterviewMemoryLedger();
+  const composer = new InterviewMainDocComposer();
+
+  ledger.startSession('interview', { codingLanguage: 'python' });
+  const snapshot = ledger.getSnapshot();
+
+  const payload: InterviewOverlayPayload = {
+    phase: 'p2_clarify',
+    phaseConfidence: 0.9,
+    manualOverrideActive: false,
+    mainLines: [
+      'Input: array of integers and a target value.',
+      'Values: duplicates are allowed and negatives are possible.',
+      'Return: indices of one valid pair.',
+    ],
+    pinnedFacts: ['Return indices of one valid pair.'],
+    freshness: {
+      transcriptUpdatedMsAgo: 0,
+      screenshotUpdatedMsAgo: null,
+      generatedMsAgo: 0,
+    },
+    generatedAt: Date.now(),
+    inputRevision: snapshot.inputRevision,
+  };
+
+  const document = composer.compose(snapshot, payload, {
+    clarificationItems: [],
+    savedContexts: snapshot.phaseDocuments.p2_clarify.savedContexts,
+  });
+  const feedLines = document.mainFeed.filter((entry) => entry.type === 'line');
+
+  assert.deepEqual(feedLines.map((entry) => entry.state), ['note', 'note', 'note']);
+});

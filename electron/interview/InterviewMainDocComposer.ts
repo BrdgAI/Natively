@@ -265,7 +265,7 @@ function matchClarificationItem(
 }
 
 function isNoteLine(line: string): boolean {
-  return /^(write|note|input:|output:|constraints?:|edge cases?:|example:|trace:|#)/i.test(line.trim());
+  return /^(write|note|input:|output:|values:|return:|constraints?:|edge cases?:|example:|trace:|#)/i.test(line.trim());
 }
 
 function mapClarificationStatus(status: InterviewClarificationItem['status']): InterviewFeedLineState {

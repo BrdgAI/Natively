@@ -5,7 +5,7 @@ import {
 
 const TERMINAL_PUNCTUATION_RE = /[.?!:;"')\]]$/;
 const QUESTION_START_RE = /^(what|why|how|when|where|who|which|can|could|should|would|do|does|did|is|are|am|will|may)\b/i;
-const LABEL_LINE_RE = /^(input|output|constraint|constraints|edge case|edge cases|example|examples|trace|note|notes|write in notes)\s*:/i;
+const LABEL_LINE_RE = /^(input|output|values|return|constraint|constraints|edge case|edge cases|example|examples|trace|note|notes|write in notes)\s*:/i;
 
 const HANGING_WORDS = new Set([
   'a',

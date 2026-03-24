@@ -5,7 +5,7 @@ import { InterviewMainDocComposer } from '../InterviewMainDocComposer';
 import { InterviewMemoryLedger } from '../InterviewMemoryLedger';
 import { InterviewOverlayPayload } from '../types';
 
-test('clarify phase prompt includes the ordered clarify categories and the slim JSON contract', () => {
+test('clarify phase prompt includes the richer one-shot clarify guidance and the slim JSON contract', () => {
   const ledger = new InterviewMemoryLedger();
   ledger.startSession('interview', { codingLanguage: 'python' });
   ledger.setProblemStatement('Two Sum', ['Exactly one answer exists'], ['nums = [2,7,11,15], target = 9']);
@@ -17,18 +17,14 @@ test('clarify phase prompt includes the ordered clarify categories and the slim 
     previousPayload: null,
   });
 
-  const inputIndex = prompt.indexOf('INPUT');
-  const outputIndex = prompt.indexOf('OUTPUT');
-  const constraintsIndex = prompt.indexOf('CONSTRAINTS');
-  const edgeCasesIndex = prompt.indexOf('EDGE CASES');
-
-  assert.ok(inputIndex >= 0);
-  assert.ok(outputIndex > inputIndex);
-  assert.ok(constraintsIndex > outputIndex);
-  assert.ok(edgeCasesIndex > constraintsIndex);
-  assert.ok(prompt.includes('"mainLines"'));
-  assert.ok(prompt.includes('"clarificationQuestions"'));
-  assert.ok(prompt.includes('"code"'));
+  assert.ok(prompt.includes('Produce at least 3 spoken lines before the first question.'));
+  assert.ok(prompt.includes('Derive them from the actual problem instead of falling back to a canned checklist.'));
+  assert.ok(prompt.includes('`Values:`'));
+  assert.ok(prompt.includes('`Return:`'));
+  assert.ok(prompt.includes('Do not name a data structure or algorithm in this phase.'));
+  assert.ok(prompt.includes('`mainLines`'));
+  assert.ok(prompt.includes('`clarificationQuestions`'));
+  assert.ok(prompt.includes('`code`'));
   assert.equal(prompt.includes('`restate`'), false);
 });
 

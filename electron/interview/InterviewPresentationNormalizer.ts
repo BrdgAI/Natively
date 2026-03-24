@@ -2,6 +2,11 @@ import {
   InterviewClarificationCandidate,
   InterviewGeneratedCode,
 } from './types';
+import {
+  MAX_INTERVIEW_CLARIFICATION_QUESTIONS,
+  MAX_INTERVIEW_MAIN_LINES,
+  MAX_INTERVIEW_PINNED_FACTS,
+} from './InterviewPromptLimits';
 
 export interface InterviewResponseFields {
   mainLines: string[];
@@ -23,8 +28,8 @@ const KNOWN_RESPONSE_KEYS = [
 
 export function normalizeInterviewResponse(fields: InterviewResponseFields): InterviewResponseFields {
   return {
-    mainLines: normalizeDisplayLines(fields.mainLines, 18),
-    pinnedFacts: normalizeDisplayLines(fields.pinnedFacts, 10),
+    mainLines: normalizeDisplayLines(fields.mainLines, MAX_INTERVIEW_MAIN_LINES),
+    pinnedFacts: normalizeDisplayLines(fields.pinnedFacts, MAX_INTERVIEW_PINNED_FACTS),
     clarificationQuestions: normalizeClarificationQuestions(fields.clarificationQuestions),
     code: normalizeGeneratedCode(fields.code),
   };
@@ -38,7 +43,7 @@ export function salvagePlainTextLines(raw: string): string[] {
     .map(sanitizeDisplayLine)
     .filter((line) => isMeaningfulDisplayLine(line) && !isJsonNoiseLine(line));
 
-  return dedupe(lines).slice(0, 18);
+  return dedupe(lines).slice(0, MAX_INTERVIEW_MAIN_LINES);
 }
 
 export function sanitizeDisplayLine(value: string): string {
@@ -84,7 +89,7 @@ function normalizeClarificationQuestions(items: InterviewClarificationCandidate[
     });
   }
 
-  return result.slice(0, 10);
+  return result.slice(0, MAX_INTERVIEW_CLARIFICATION_QUESTIONS);
 }
 
 function normalizeGeneratedCode(code: InterviewGeneratedCode | null): InterviewGeneratedCode | null {

@@ -7,6 +7,10 @@ import {
   normalizeInterviewResponse,
   salvagePlainTextLines,
 } from './InterviewPresentationNormalizer';
+import {
+  MAX_INTERVIEW_CLARIFICATION_QUESTIONS,
+  MAX_INTERVIEW_MAIN_LINES,
+} from './InterviewPromptLimits';
 
 interface JsonObject {
   [key: string]: JsonValue;
@@ -34,13 +38,9 @@ export function extractInterviewResponse(raw: string): InterviewResponseFields {
     : extractByKnownKeys(normalizedRaw);
 
   const code = extracted.code || extractStandaloneCodeBlock(normalizedRaw);
-  const hasStructuredContent = extracted.mainLines.length > 0
-    || extracted.pinnedFacts.length > 0
-    || extracted.clarificationQuestions.length > 0
-    || Boolean(code);
 
   return normalizeInterviewResponse({
-    mainLines: extracted.mainLines.length > 0 || hasStructuredContent
+    mainLines: extracted.mainLines.length > 0
       ? extracted.mainLines
       : salvagePlainTextLines(normalizedRaw),
     pinnedFacts: extracted.pinnedFacts,
@@ -190,7 +190,7 @@ function parseStringArrayValue(valueText: string | null): string[] {
     .split(/[\n,]+/)
     .map((item) => item.trim())
     .filter(Boolean)
-    .slice(0, 18);
+    .slice(0, MAX_INTERVIEW_MAIN_LINES);
 }
 
 function parseClarificationQuestionsValue(valueText: string | null): InterviewClarificationCandidate[] {
@@ -219,7 +219,7 @@ function parseClarificationQuestionsValue(valueText: string | null): InterviewCl
     });
   }
 
-  return result.slice(0, 10);
+  return result.slice(0, MAX_INTERVIEW_CLARIFICATION_QUESTIONS);
 }
 
 function parseGeneratedCodeValue(valueText: string | null): InterviewGeneratedCode | null {
@@ -461,7 +461,7 @@ function parseStringArray(value: JsonValue[]): string[] {
   return value
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter(Boolean)
-    .slice(0, 18);
+    .slice(0, MAX_INTERVIEW_MAIN_LINES);
 }
 
 function normalizeStringArray(items: JsonValue[] | string[]): string[] {
@@ -469,7 +469,7 @@ function normalizeStringArray(items: JsonValue[] | string[]): string[] {
   return values
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter(Boolean)
-    .slice(0, 18);
+    .slice(0, MAX_INTERVIEW_MAIN_LINES);
 }
 
 function safelyParseObject(raw: string): JsonObject | null {

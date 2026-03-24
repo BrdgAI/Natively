@@ -59,11 +59,17 @@ test('clarify first NEXT produces a full pack and repeated NEXT does not drip-fe
   assert.ok(feedLines.includes('Should I assume the input is unsorted?'));
   assert.ok(feedLines.includes('Write in notes: return indices, not values.'));
   assert.equal(first.latestPayload?.mainLines[0], 'Let me restate the problem first.');
+  assert.deepEqual(first.latestPayload?.clarificationQuestions, [
+    {
+      text: 'Should I assume the input is unsorted?',
+      why: 'Sortedness changes the solution shape.',
+    },
+  ]);
 
   const second = await orchestrator.handleNext();
 
   assert.equal(second.phaseDocuments.p2_clarify.status.status, 'unchanged');
-  assert.equal(second.phaseDocuments.p2_clarify.status.message, 'No updates');
+  assert.equal(second.phaseDocuments.p2_clarify.status.message, 'No updates found');
   assert.deepEqual(second.latestPayload?.mainLines, first.latestPayload?.mainLines);
 
   orchestrator.endSession();
@@ -188,8 +194,7 @@ test('new revisions do not append the full phase block again when the content ha
   const second = await orchestrator.handleNext();
 
   assert.equal(second.phaseDocuments.p3_approach.mainFeed.filter((entry) => entry.type === 'line').length, 2);
-  assert.equal(second.phaseDocuments.p3_approach.status.status, 'unchanged');
-  assert.equal(second.phaseDocuments.p3_approach.status.message, 'No updates found');
+  assert.equal(second.phaseDocuments.p3_approach.status.status, 'updated');
 
   orchestrator.endSession();
 });

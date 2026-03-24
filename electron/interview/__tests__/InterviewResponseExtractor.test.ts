@@ -97,3 +97,15 @@ def solve(nums, target):
   assert.equal(extracted.code?.language, 'python');
   assert.equal(extracted.code?.content, 'def solve(nums, target):\n    return None');
 });
+
+test('response extractor preserves longer main line lists needed for deeper testing scripts', () => {
+  const extracted = extractInterviewResponse(JSON.stringify({
+    mainLines: Array.from({ length: 24 }, (_, index) => `Line ${index + 1}.`),
+    pinnedFacts: [],
+    clarificationQuestions: [],
+    code: null,
+  }));
+
+  assert.equal(extracted.mainLines.length, 24);
+  assert.equal(extracted.mainLines[23], 'Line 24.');
+});
