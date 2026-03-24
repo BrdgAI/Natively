@@ -83,6 +83,7 @@ export const AIProvidersSettings: React.FC = () => {
     const [groqApiKey, setGroqApiKey] = useState('');
     const [openaiApiKey, setOpenaiApiKey] = useState('');
     const [claudeApiKey, setClaudeApiKey] = useState('');
+    const [moonshotApiKey, setMoonshotApiKey] = useState('');
 
     // Status
     const [savedStatus, setSavedStatus] = useState<Record<string, boolean>>({});
@@ -127,7 +128,8 @@ export const AIProvidersSettings: React.FC = () => {
                         gemini: creds.hasGeminiKey,
                         groq: creds.hasGroqKey,
                         openai: creds.hasOpenaiKey,
-                        claude: creds.hasClaudeKey
+                        claude: creds.hasClaudeKey,
+                        moonshot: creds.hasMoonshotKey
                     });
                     // Load preferred models
                     const pm: Record<string, string> = {};
@@ -135,6 +137,7 @@ export const AIProvidersSettings: React.FC = () => {
                     if (creds.groqPreferredModel) pm.groq = creds.groqPreferredModel;
                     if (creds.openaiPreferredModel) pm.openai = creds.openaiPreferredModel;
                     if (creds.claudePreferredModel) pm.claude = creds.claudePreferredModel;
+                    if (creds.moonshotPreferredModel) pm.moonshot = creds.moonshotPreferredModel;
                     setPreferredModels(pm);
                 }
 
@@ -266,6 +269,8 @@ export const AIProvidersSettings: React.FC = () => {
             if (provider === 'openai') result = await window.electronAPI.setOpenaiApiKey(key);
             // @ts-ignore
             if (provider === 'claude') result = await window.electronAPI.setClaudeApiKey(key);
+            // @ts-ignore
+            if (provider === 'moonshot') result = await window.electronAPI.setMoonshotApiKey(key);
 
             if (result && result.success) {
                 setSavedStatus(prev => ({ ...prev, [provider]: true }));
@@ -292,6 +297,8 @@ export const AIProvidersSettings: React.FC = () => {
             if (provider === 'openai') result = await window.electronAPI.setOpenaiApiKey('');
             // @ts-ignore
             if (provider === 'claude') result = await window.electronAPI.setClaudeApiKey('');
+            // @ts-ignore
+            if (provider === 'moonshot') result = await window.electronAPI.setMoonshotApiKey('');
 
             if (result && result.success) {
                 setHasStoredKey(prev => ({ ...prev, [provider]: false }));
@@ -573,6 +580,25 @@ export const AIProvidersSettings: React.FC = () => {
                         keyPlaceholder="sk-ant-..."
                         keyUrl="https://console.anthropic.com/settings/keys"
                         onPreferredModelChange={(model) => setPreferredModels(prev => ({ ...prev, claude: model }))}
+                    />
+
+                    <ProviderCard
+                        providerId="moonshot"
+                        providerName="Moonshot"
+                        apiKey={moonshotApiKey}
+                        preferredModel={preferredModels.moonshot}
+                        hasStoredKey={!!hasStoredKey.moonshot}
+                        onKeyChange={setMoonshotApiKey}
+                        onSaveKey={async () => { await handleSaveKey('moonshot', moonshotApiKey, setMoonshotApiKey); }}
+                        onRemoveKey={() => handleRemoveKey('moonshot', setMoonshotApiKey)}
+                        onTestConnection={() => handleTestConnection('moonshot', moonshotApiKey)}
+                        testStatus={testStatus.moonshot || 'idle'}
+                        testError={testError.moonshot}
+                        savingStatus={!!savingStatus.moonshot}
+                        savedStatus={!!savedStatus.moonshot}
+                        keyPlaceholder="sk-..."
+                        keyUrl="https://platform.moonshot.ai/console/api-keys"
+                        onPreferredModelChange={(model) => setPreferredModels(prev => ({ ...prev, moonshot: model }))}
                     />
 
                 </div>

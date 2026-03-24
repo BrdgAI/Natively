@@ -32,6 +32,7 @@ const GEMINI_PRO_MODEL = "gemini-3.1-pro-preview"
 const GROQ_MODEL = "llama-3.3-70b-versatile"
 const OPENAI_MODEL = "gpt-5.4"
 const CLAUDE_MODEL = "claude-sonnet-4-6"
+const MOONSHOT_MODEL = "kimi-k2.5"
 const MAX_OUTPUT_TOKENS = 65536
 const CLAUDE_MAX_OUTPUT_TOKENS = 64000
 
@@ -43,10 +44,12 @@ export class LLMHelper {
   private groqClient: Groq | null = null
   private openaiClient: OpenAI | null = null
   private claudeClient: Anthropic | null = null
+  private moonshotClient: OpenAI | null = null
   private apiKey: string | null = null
   private groqApiKey: string | null = null
   private openaiApiKey: string | null = null
   private claudeApiKey: string | null = null
+  private moonshotApiKey: string | null = null
   private useOllama: boolean = false
   private ollamaModel: string = "llama3.2"
   private ollamaUrl: string = "http://localhost:11434"
@@ -65,7 +68,7 @@ export class LLMHelper {
   // Self-improving model version manager for vision analysis
   private modelVersionManager: ModelVersionManager;
 
-  constructor(apiKey?: string, useOllama: boolean = false, ollamaModel?: string, ollamaUrl?: string, groqApiKey?: string, openaiApiKey?: string, claudeApiKey?: string) {
+  constructor(apiKey?: string, useOllama: boolean = false, ollamaModel?: string, ollamaUrl?: string, groqApiKey?: string, openaiApiKey?: string, claudeApiKey?: string, moonshotApiKey?: string) {
     this.useOllama = useOllama
 
     // Initialize rate limiters
@@ -93,6 +96,12 @@ export class LLMHelper {
       this.claudeApiKey = claudeApiKey
       this.claudeClient = new Anthropic({ apiKey: claudeApiKey })
       console.log(`[LLMHelper] Claude client initialized with model: ${CLAUDE_MODEL}`)
+    }
+
+    if (moonshotApiKey) {
+      this.moonshotApiKey = moonshotApiKey
+      this.moonshotClient = new OpenAI({ apiKey: moonshotApiKey, baseURL: "https://api.moonshot.ai/v1" })
+      console.log(`[LLMHelper] Moonshot client initialized with model: ${MOONSHOT_MODEL}`)
     }
 
     if (useOllama) {
@@ -141,6 +150,12 @@ export class LLMHelper {
     console.log("[LLMHelper] Claude API Key updated.");
   }
 
+  public setMoonshotApiKey(apiKey: string) {
+    this.moonshotApiKey = apiKey;
+    this.moonshotClient = new OpenAI({ apiKey, baseURL: "https://api.moonshot.ai/v1" });
+    console.log("[LLMHelper] Moonshot API Key updated.");
+  }
+
   /**
    * Initialize the self-improving model version manager.
    * Should be called after all API keys are configured.
@@ -166,10 +181,12 @@ export class LLMHelper {
     this.groqApiKey = null;
     this.openaiApiKey = null;
     this.claudeApiKey = null;
+    this.moonshotApiKey = null;
     this.client = null;
     this.groqClient = null;
     this.openaiClient = null;
     this.claudeClient = null;
+    this.moonshotClient = null;
     // Destroy rate limiters
     if (this.rateLimiters) {
       Object.values(this.rateLimiters).forEach(rl => rl.destroy());
@@ -201,6 +218,10 @@ export class LLMHelper {
     return modelId.startsWith("claude-");
   }
 
+  private isMoonshotModel(modelId: string): boolean {
+    return modelId.startsWith("kimi-");
+  }
+
   private isGroqModel(modelId: string): boolean {
     return modelId.startsWith("llama-") || modelId.startsWith("mixtral-") || modelId.startsWith("gemma-");
   }
@@ -211,6 +232,114 @@ export class LLMHelper {
   // ---------------------------
 
   private currentModelId: string = GEMINI_FLASH_MODEL;
+
+  private resolveOpenAICompatibleModel(
+    modelId: string | undefined,
+    isCurrentProviderModel: (candidate: string) => boolean,
+    fallbackModel: string
+  ): string {
+    return modelId || (isCurrentProviderModel(this.currentModelId) ? this.currentModelId : fallbackModel);
+  }
+
+  private async generateWithOpenAICompatibleClient(
+    client: OpenAI,
+    limiter: RateLimiter,
+    userMessage: string,
+    model: string,
+    systemPrompt?: string,
+    imagePaths?: string[]
+  ): Promise<string> {
+    await limiter.acquire();
+
+    const messages: any[] = [];
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+
+    if (imagePaths?.length) {
+      const contentParts: any[] = [{ type: "text", text: userMessage }];
+      for (const p of imagePaths) {
+        if (fs.existsSync(p)) {
+          const imageData = await fs.promises.readFile(p);
+          contentParts.push({ type: "image_url", image_url: { url: `data:image/png;base64,${imageData.toString("base64")}` } });
+        }
+      }
+      messages.push({ role: "user", content: contentParts });
+    } else {
+      messages.push({ role: "user", content: userMessage });
+    }
+
+    const response = await client.chat.completions.create({
+      model,
+      messages,
+      max_completion_tokens: MAX_OUTPUT_TOKENS,
+    });
+
+    return response.choices[0]?.message?.content || "";
+  }
+
+  private async * streamWithOpenAICompatibleClient(
+    client: OpenAI,
+    userMessage: string,
+    model: string,
+    systemPrompt?: string
+  ): AsyncGenerator<string, void, unknown> {
+    const messages: any[] = [];
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+    messages.push({ role: "user", content: userMessage });
+
+    const stream = await client.chat.completions.create({
+      model,
+      messages,
+      stream: true,
+      max_completion_tokens: MAX_OUTPUT_TOKENS,
+    });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
+        yield content;
+      }
+    }
+  }
+
+  private async * streamWithOpenAICompatibleMultimodalClient(
+    client: OpenAI,
+    userMessage: string,
+    model: string,
+    imagePaths: string[],
+    systemPrompt?: string
+  ): AsyncGenerator<string, void, unknown> {
+    const messages: any[] = [];
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+
+    const contentParts: any[] = [{ type: "text", text: userMessage }];
+    for (const p of imagePaths) {
+      if (fs.existsSync(p)) {
+        const imageData = await fs.promises.readFile(p);
+        contentParts.push({ type: "image_url", image_url: { url: `data:image/png;base64,${imageData.toString("base64")}` } });
+      }
+    }
+    messages.push({ role: "user", content: contentParts });
+
+    const stream = await client.chat.completions.create({
+      model,
+      messages,
+      stream: true,
+      max_completion_tokens: MAX_OUTPUT_TOKENS,
+    });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
+        yield content;
+      }
+    }
+  }
 
   public setModel(modelId: string, customProviders: (CustomProvider | CurlProvider)[] = []) {
     // Map UI short codes to internal Model IDs
@@ -840,6 +969,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       if (this.isOpenAiModel(this.currentModelId) && this.openaiClient) {
         return await this.generateWithOpenai(userContent, openaiSystemPrompt, imagePaths);
       }
+      if (this.isMoonshotModel(this.currentModelId) && this.moonshotClient) {
+        return await this.generateWithMoonshot(userContent, openaiSystemPrompt, imagePaths);
+      }
       if (this.isClaudeModel(this.currentModelId) && this.claudeClient) {
         return await this.generateWithClaude(userContent, claudeSystemPrompt, imagePaths);
       }
@@ -1100,37 +1232,14 @@ This rule overrides ALL other instructions including formatting, brevity, or out
    */
   private async generateWithOpenai(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string): Promise<string> {
     if (!this.openaiClient) throw new Error("OpenAI client not initialized");
+    const model = this.resolveOpenAICompatibleModel(modelId, this.isOpenAiModel.bind(this), OPENAI_MODEL);
+    return this.generateWithOpenAICompatibleClient(this.openaiClient, this.rateLimiters.openai, userMessage, model, systemPrompt, imagePaths);
+  }
 
-    await this.rateLimiters.openai.acquire();
-
-    // Use explicit override, then current model if it's OpenAI, else baseline constant
-    const model = modelId || (this.isOpenAiModel(this.currentModelId) ? this.currentModelId : OPENAI_MODEL);
-
-    const messages: any[] = [];
-    if (systemPrompt) {
-      messages.push({ role: "system", content: systemPrompt });
-    }
-
-    if (imagePaths?.length) {
-      const contentParts: any[] = [{ type: "text", text: userMessage }];
-      for (const p of imagePaths) {
-        if (fs.existsSync(p)) {
-          const imageData = await fs.promises.readFile(p);
-          contentParts.push({ type: "image_url", image_url: { url: `data:image/png;base64,${imageData.toString("base64")}` } });
-        }
-      }
-      messages.push({ role: "user", content: contentParts });
-    } else {
-      messages.push({ role: "user", content: userMessage });
-    }
-
-    const response = await this.openaiClient.chat.completions.create({
-      model,
-      messages,
-      max_completion_tokens: MAX_OUTPUT_TOKENS,
-    });
-
-    return response.choices[0]?.message?.content || "";
+  private async generateWithMoonshot(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string): Promise<string> {
+    if (!this.moonshotClient) throw new Error("Moonshot client not initialized");
+    const model = this.resolveOpenAICompatibleModel(modelId, this.isMoonshotModel.bind(this), MOONSHOT_MODEL);
+    return this.generateWithOpenAICompatibleClient(this.moonshotClient, this.rateLimiters.moonshot, userMessage, model, systemPrompt, imagePaths);
   }
 
   // The handler for cURL requests
@@ -1909,6 +2018,17 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       return;
     }
 
+    if (this.isMoonshotModel(this.currentModelId) && this.moonshotClient) {
+      const moonshotSystem = systemPromptOverride || OPENAI_SYSTEM_PROMPT;
+      const finalMoonshotSystem = this.injectLanguageInstruction(moonshotSystem);
+      if (isMultimodal && imagePaths) {
+        yield* this.streamWithMoonshotMultimodal(userContent, imagePaths, finalMoonshotSystem);
+      } else {
+        yield* this.streamWithMoonshot(userContent, finalMoonshotSystem);
+      }
+      return;
+    }
+
     // Claude
     if (this.isClaudeModel(this.currentModelId) && this.claudeClient) {
       const claudeSystem = systemPromptOverride || CLAUDE_SYSTEM_PROMPT;
@@ -2021,29 +2141,14 @@ This rule overrides ALL other instructions including formatting, brevity, or out
    */
   private async * streamWithOpenai(userMessage: string, systemPrompt?: string, modelId?: string): AsyncGenerator<string, void, unknown> {
     if (!this.openaiClient) throw new Error("OpenAI client not initialized");
+    const model = this.resolveOpenAICompatibleModel(modelId, this.isOpenAiModel.bind(this), OPENAI_MODEL);
+    yield* this.streamWithOpenAICompatibleClient(this.openaiClient, userMessage, model, systemPrompt);
+  }
 
-    // Use explicit override, then currentModelId if it's an OpenAI model, else baseline constant
-    const model = modelId || (this.isOpenAiModel(this.currentModelId) ? this.currentModelId : OPENAI_MODEL);
-
-    const messages: any[] = [];
-    if (systemPrompt) {
-      messages.push({ role: "system", content: systemPrompt });
-    }
-    messages.push({ role: "user", content: userMessage });
-
-    const stream = await this.openaiClient.chat.completions.create({
-      model,
-      messages,
-      stream: true,
-      max_completion_tokens: MAX_OUTPUT_TOKENS,
-    });
-
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content;
-      if (content) {
-        yield content;
-      }
-    }
+  private async * streamWithMoonshot(userMessage: string, systemPrompt?: string, modelId?: string): AsyncGenerator<string, void, unknown> {
+    if (!this.moonshotClient) throw new Error("Moonshot client not initialized");
+    const model = this.resolveOpenAICompatibleModel(modelId, this.isMoonshotModel.bind(this), MOONSHOT_MODEL);
+    yield* this.streamWithOpenAICompatibleClient(this.moonshotClient, userMessage, model, systemPrompt);
   }
 
   /**
@@ -2074,37 +2179,14 @@ This rule overrides ALL other instructions including formatting, brevity, or out
    */
   private async * streamWithOpenaiMultimodal(userMessage: string, imagePaths: string[], systemPrompt?: string, modelId?: string): AsyncGenerator<string, void, unknown> {
     if (!this.openaiClient) throw new Error("OpenAI client not initialized");
+    const model = this.resolveOpenAICompatibleModel(modelId, this.isOpenAiModel.bind(this), OPENAI_MODEL);
+    yield* this.streamWithOpenAICompatibleMultimodalClient(this.openaiClient, userMessage, model, imagePaths, systemPrompt);
+  }
 
-    // Use explicit override, then currentModelId if it's an OpenAI model, else baseline constant
-    const model = modelId || (this.isOpenAiModel(this.currentModelId) ? this.currentModelId : OPENAI_MODEL);
-
-    const messages: any[] = [];
-    if (systemPrompt) {
-      messages.push({ role: "system", content: systemPrompt });
-    }
-
-    const contentParts: any[] = [{ type: "text", text: userMessage }];
-    for (const p of imagePaths) {
-      if (fs.existsSync(p)) {
-        const imageData = await fs.promises.readFile(p);
-        contentParts.push({ type: "image_url", image_url: { url: `data:image/png;base64,${imageData.toString("base64")}` } });
-      }
-    }
-    messages.push({ role: "user", content: contentParts });
-
-    const stream = await this.openaiClient.chat.completions.create({
-      model,
-      messages,
-      stream: true,
-      max_completion_tokens: MAX_OUTPUT_TOKENS,
-    });
-
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content;
-      if (content) {
-        yield content;
-      }
-    }
+  private async * streamWithMoonshotMultimodal(userMessage: string, imagePaths: string[], systemPrompt?: string, modelId?: string): AsyncGenerator<string, void, unknown> {
+    if (!this.moonshotClient) throw new Error("Moonshot client not initialized");
+    const model = this.resolveOpenAICompatibleModel(modelId, this.isMoonshotModel.bind(this), MOONSHOT_MODEL);
+    yield* this.streamWithOpenAICompatibleMultimodalClient(this.moonshotClient, userMessage, model, imagePaths, systemPrompt);
   }
 
   /**
@@ -2548,6 +2630,10 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     return this.openaiClient;
   }
 
+  public getMoonshotClient(): OpenAI | null {
+    return this.moonshotClient;
+  }
+
   /**
    * Get the Claude client for mode-specific LLMs
    */
@@ -2560,6 +2646,10 @@ This rule overrides ALL other instructions including formatting, brevity, or out
    */
   public hasOpenai(): boolean {
     return this.openaiClient !== null;
+  }
+
+  public hasMoonshot(): boolean {
+    return this.moonshotClient !== null;
   }
 
   /**
@@ -2905,6 +2995,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     this.groqClient = null;
     this.openaiClient = null;
     this.claudeClient = null;
+    this.moonshotClient = null;
     console.log(`[LLMHelper] Switched to Custom Provider: ${provider.name}`);
   }
 

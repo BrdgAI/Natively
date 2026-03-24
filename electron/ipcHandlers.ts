@@ -725,6 +725,23 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  safeHandle("set-moonshot-api-key", async (_, apiKey: string) => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      CredentialsManager.getInstance().setMoonshotApiKey(apiKey);
+
+      const llmHelper = appState.processingHelper.getLLMHelper();
+      llmHelper.setMoonshotApiKey(apiKey);
+
+      appState.getIntelligenceManager().initializeLLMs();
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error saving Moonshot API key:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
   safeHandle("set-claude-api-key", async (_, apiKey: string) => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
@@ -876,6 +893,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         hasGroqKey: hasKey(creds.groqApiKey),
         hasOpenaiKey: hasKey(creds.openaiApiKey),
         hasClaudeKey: hasKey(creds.claudeApiKey),
+        hasMoonshotKey: hasKey(creds.moonshotApiKey),
         googleServiceAccountPath: creds.googleServiceAccountPath || null,
         sttProvider: creds.sttProvider || 'google',
         groqSttModel: creds.groqSttModel || 'whisper-large-v3-turbo',
@@ -895,9 +913,10 @@ export function initializeIpcHandlers(appState: AppState): void {
         groqPreferredModel: creds.groqPreferredModel || undefined,
         openaiPreferredModel: creds.openaiPreferredModel || undefined,
         claudePreferredModel: creds.claudePreferredModel || undefined,
+        moonshotPreferredModel: creds.moonshotPreferredModel || undefined,
       };
     } catch (error: any) {
-      return { hasGeminiKey: false, hasGroqKey: false, hasOpenaiKey: false, hasClaudeKey: false, googleServiceAccountPath: null, sttProvider: 'google', groqSttModel: 'whisper-large-v3-turbo', hasSttGroqKey: false, hasSttOpenaiKey: false, hasDeepgramKey: false, hasElevenLabsKey: false, hasAzureKey: false, azureRegion: 'eastus', hasIbmWatsonKey: false, ibmWatsonRegion: 'us-south', hasSonioxKey: false, sonioxSttModel: 'stt-rt-v4', hasTavilyKey: false };
+      return { hasGeminiKey: false, hasGroqKey: false, hasOpenaiKey: false, hasClaudeKey: false, hasMoonshotKey: false, googleServiceAccountPath: null, sttProvider: 'google', groqSttModel: 'whisper-large-v3-turbo', hasSttGroqKey: false, hasSttOpenaiKey: false, hasDeepgramKey: false, hasElevenLabsKey: false, hasAzureKey: false, azureRegion: 'eastus', hasIbmWatsonKey: false, ibmWatsonRegion: 'us-south', hasSonioxKey: false, sonioxSttModel: 'stt-rt-v4', hasTavilyKey: false };
     }
   });
 
@@ -905,7 +924,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   // Dynamic Model Discovery Handlers
   // ==========================================
 
-  safeHandle("fetch-provider-models", async (_, provider: 'gemini' | 'groq' | 'openai' | 'claude', apiKey: string) => {
+  safeHandle("fetch-provider-models", async (_, provider: 'gemini' | 'groq' | 'openai' | 'claude' | 'moonshot', apiKey: string) => {
     try {
       // Fall back to stored key if no key was explicitly provided
       let key = apiKey?.trim();
@@ -916,6 +935,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         else if (provider === 'groq') key = cm.getGroqApiKey();
         else if (provider === 'openai') key = cm.getOpenaiApiKey();
         else if (provider === 'claude') key = cm.getClaudeApiKey();
+        else if (provider === 'moonshot') key = cm.getMoonshotApiKey();
       }
 
       if (!key) {
@@ -932,7 +952,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("set-provider-preferred-model", async (_, provider: 'gemini' | 'groq' | 'openai' | 'claude', modelId: string) => {
+  safeHandle("set-provider-preferred-model", async (_, provider: 'gemini' | 'groq' | 'openai' | 'claude' | 'moonshot', modelId: string) => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setPreferredModel(provider, modelId);
@@ -1278,7 +1298,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("test-llm-connection", async (_, provider: 'gemini' | 'groq' | 'openai' | 'claude', apiKey?: string) => {
+  safeHandle("test-llm-connection", async (_, provider: 'gemini' | 'groq' | 'openai' | 'claude' | 'moonshot', apiKey?: string) => {
     console.log(`[IPC] Received test-llm-connection request for provider: ${provider}`);
     try {
       if (!apiKey || !apiKey.trim()) {
@@ -1288,6 +1308,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         else if (provider === 'groq') apiKey = creds.getGroqApiKey();
         else if (provider === 'openai') apiKey = creds.getOpenaiApiKey();
         else if (provider === 'claude') apiKey = creds.getClaudeApiKey();
+        else if (provider === 'moonshot') apiKey = creds.getMoonshotApiKey();
       }
 
       if (!apiKey || !apiKey.trim()) {
@@ -1332,6 +1353,14 @@ export function initializeIpcHandlers(appState: AppState): void {
             'anthropic-version': '2023-06-01',
             'content-type': 'application/json'
           },
+          timeout: 15000
+        });
+      } else if (provider === 'moonshot') {
+        response = await axios.post('https://api.moonshot.ai/v1/chat/completions', {
+          model: "kimi-k2.5",
+          messages: [{ role: "user", content: "Hello" }]
+        }, {
+          headers: { Authorization: `Bearer ${apiKey}` },
           timeout: 15000
         });
       }

@@ -10,7 +10,7 @@ export interface ProviderModel {
     label: string;
 }
 
-type Provider = 'gemini' | 'groq' | 'openai' | 'claude';
+type Provider = 'gemini' | 'groq' | 'openai' | 'claude' | 'moonshot';
 
 /**
  * Fetch available models from a provider's API.
@@ -29,6 +29,8 @@ export async function fetchProviderModels(
             return fetchAnthropicModels(apiKey);
         case 'gemini':
             return fetchGeminiModels(apiKey);
+        case 'moonshot':
+            return fetchMoonshotModels(apiKey);
         default:
             throw new Error(`Unknown provider: ${provider}`);
     }
@@ -160,5 +162,19 @@ async function fetchGeminiModels(apiKey: string): Promise<ProviderModel[]> {
             const id = (m.name || '').replace(/^models\//, '');
             return { id, label: m.displayName || id };
         })
+        .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+async function fetchMoonshotModels(apiKey: string): Promise<ProviderModel[]> {
+    const response = await axios.get('https://api.moonshot.ai/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        timeout: 15000,
+    });
+
+    const models: any[] = response.data?.data || [];
+
+    return models
+        .filter((m: any) => ((m.id || '') as string).toLowerCase().includes('kimi'))
+        .map((m: any) => ({ id: m.id, label: m.id }))
         .sort((a, b) => a.label.localeCompare(b.label));
 }

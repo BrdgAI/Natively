@@ -27,6 +27,7 @@ export interface StoredCredentials {
     groqApiKey?: string;
     openaiApiKey?: string;
     claudeApiKey?: string;
+    moonshotApiKey?: string;
     googleServiceAccountPath?: string;
     customProviders?: CustomProvider[];
     curlProviders?: CurlProvider[];
@@ -53,6 +54,7 @@ export interface StoredCredentials {
     groqPreferredModel?: string;
     openaiPreferredModel?: string;
     claudePreferredModel?: string;
+    moonshotPreferredModel?: string;
 }
 
 export class CredentialsManager {
@@ -97,6 +99,10 @@ export class CredentialsManager {
 
     public getClaudeApiKey(): string | undefined {
         return this.credentials.claudeApiKey;
+    }
+
+    public getMoonshotApiKey(): string | undefined {
+        return this.credentials.moonshotApiKey;
     }
 
     public getGoogleServiceAccountPath(): string | undefined {
@@ -202,6 +208,12 @@ export class CredentialsManager {
         console.log('[CredentialsManager] Claude API Key updated');
     }
 
+    public setMoonshotApiKey(key: string): void {
+        this.credentials.moonshotApiKey = key;
+        this.saveCredentials();
+        console.log('[CredentialsManager] Moonshot API Key updated');
+    }
+
     public setGoogleServiceAccountPath(filePath: string): void {
         this.credentials.googleServiceAccountPath = filePath;
         this.saveCredentials();
@@ -304,12 +316,12 @@ export class CredentialsManager {
         console.log(`[CredentialsManager] Default Model set to: ${model}`);
     }
 
-    public getPreferredModel(provider: 'gemini' | 'groq' | 'openai' | 'claude'): string | undefined {
+    public getPreferredModel(provider: 'gemini' | 'groq' | 'openai' | 'claude' | 'moonshot'): string | undefined {
         const key = `${provider}PreferredModel` as keyof StoredCredentials;
         return this.credentials[key] as string | undefined;
     }
 
-    public setPreferredModel(provider: 'gemini' | 'groq' | 'openai' | 'claude', modelId: string): void {
+    public setPreferredModel(provider: 'gemini' | 'groq' | 'openai' | 'claude' | 'moonshot', modelId: string): void {
         const key = `${provider}PreferredModel` as keyof StoredCredentials;
         (this.credentials as any)[key] = modelId;
         this.saveCredentials();

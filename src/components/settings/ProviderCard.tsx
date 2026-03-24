@@ -7,7 +7,7 @@ interface FetchedModel {
 }
 
 interface ProviderCardProps {
-    providerId: 'gemini' | 'groq' | 'openai' | 'claude';
+    providerId: 'gemini' | 'groq' | 'openai' | 'claude' | 'moonshot';
     providerName: string;
     apiKey: string;
     preferredModel?: string;

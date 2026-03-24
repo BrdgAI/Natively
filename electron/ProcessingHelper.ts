@@ -37,13 +37,14 @@ export class ProcessingHelper {
       let groqApiKey = process.env.GROQ_API_KEY
       let openaiApiKey = process.env.OPENAI_API_KEY
       let claudeApiKey = process.env.CLAUDE_API_KEY
+      let moonshotApiKey = process.env.MOONSHOT_API_KEY
 
       // Allow initializing without key (will be loaded in loadStoredCredentials or via Settings)
       if (!apiKey) {
         console.warn("[ProcessingHelper] GEMINI_API_KEY not found in env. Will try CredentialsManager after ready.")
       }
 
-      this.llmHelper = new LLMHelper(apiKey, false, undefined, undefined, groqApiKey, openaiApiKey, claudeApiKey)
+      this.llmHelper = new LLMHelper(apiKey, false, undefined, undefined, groqApiKey, openaiApiKey, claudeApiKey, moonshotApiKey)
     }
   }
 
@@ -58,6 +59,7 @@ export class ProcessingHelper {
     const groqKey = credManager.getGroqApiKey();
     const openaiKey = credManager.getOpenaiApiKey();
     const claudeKey = credManager.getClaudeApiKey();
+    const moonshotKey = credManager.getMoonshotApiKey();
 
     if (geminiKey) {
       console.log("[ProcessingHelper] Loading stored Gemini API Key from CredentialsManager");
@@ -77,6 +79,11 @@ export class ProcessingHelper {
     if (claudeKey) {
       console.log("[ProcessingHelper] Loading stored Claude API Key from CredentialsManager");
       this.llmHelper.setClaudeApiKey(claudeKey);
+    }
+
+    if (moonshotKey) {
+      console.log("[ProcessingHelper] Loading stored Moonshot API Key from CredentialsManager");
+      this.llmHelper.setMoonshotApiKey(moonshotKey);
     }
 
     // CRITICAL: Re-initialize IntelligenceManager now that keys are loaded

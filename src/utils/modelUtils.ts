@@ -3,7 +3,7 @@ export const STANDARD_CLOUD_MODELS: Record<string, {
     ids: string[];
     names: string[];
     descs: string[];
-    pmKey: 'geminiPreferredModel' | 'openaiPreferredModel' | 'claudePreferredModel' | 'groqPreferredModel';
+    pmKey: 'geminiPreferredModel' | 'openaiPreferredModel' | 'claudePreferredModel' | 'groqPreferredModel' | 'moonshotPreferredModel';
 }> = {
     gemini: {
         hasKeyCheck: (creds) => !!creds?.hasGeminiKey,
@@ -32,6 +32,13 @@ export const STANDARD_CLOUD_MODELS: Record<string, {
         names: ['Groq Llama 3.3'],
         descs: ['Ultra Fast'],
         pmKey: 'groqPreferredModel'
+    },
+    moonshot: {
+        hasKeyCheck: (creds) => !!creds?.hasMoonshotKey,
+        ids: ['kimi-k2.5', 'kimi-k2'],
+        names: ['Kimi K2.5', 'Kimi K2'],
+        descs: ['Moonshot • Multimodal', 'Moonshot • Text + Tools'],
+        pmKey: 'moonshotPreferredModel'
     },
 };
 
